@@ -1575,8 +1575,8 @@ function triggerXPDuper() {
         setInterval(makeHitboxes, 1000);
     }
 
-    waitForElement('div.MainLoadingState.FullyFancyText', (el) => {
-        console.log('Target div appeared:', el);
+    waitForElement('#noa-container canvas', (el) => {
+        console.log('Game canvas appeared:', el);
         performInjection();
         if (!injectedBool) {
             showTemporaryNotification("injection failed");
