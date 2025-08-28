@@ -136,6 +136,7 @@
     let fadeVolumeInterval;
     let spaceHeld = false;
     let bigHeadsEnabled = false;
+    let antiBanEnabled = false;
 
 
     const scannedChunks = new Set();
@@ -868,45 +869,28 @@ function triggerXPDuper() {
 }
 
     function makeHitboxes() {
-        if (!injectedBool) {
-            console.log("NOT INJECTED NO TARGET");
-            return;
-        }
+        if (!injectedBool || !Fuxny.rendering) return;
 
         const rendering = r.values(Fuxny.rendering)[18];
-        const objectData = rendering?.objectData;
-        if (!objectData || !eIdKey) return;
+        if (!rendering) return;
 
-        const activeEIds = new Set();
+        const playerIds = n.noa.playerList;
+        if (!playerIds) return;
 
-        // First, build a set of currently valid entity IDs
-        for (const key in objectData) {
-            if (key === "1") continue;
-            const obj = objectData[key];
-            const eId = obj[eIdKey];
+        const activeEIds = new Set(playerIds);
 
-            if (
-                eId == null ||
-                eId === myId ||
-                obj.pickable === false ||
-                obj.type !== "Player" ||
-                !Fuxny.entities.getState(eId, "genericLifeformState")
-            ) continue;
+        // Create hitboxes for new players
+        for (const playerId of playerIds) {
+            if (hitboxes[playerId]) continue; // Skip if hitbox already exists
 
-            activeEIds.add(eId);
-
-            // If hitbox already exists, skip
-            if (hitboxes[eId]) continue;
-
-            // Create the hitbox
-            let newBox_00 = Fuxny.Lion.Mesh.CreateBox("mesh", 1, false, 1, Fuxny.Lion.scene);
+            let newBox_00 = Fuxny.Lion.Mesh.CreateBox("hitbox_mesh_" + playerId, 1, false, 1, Fuxny.Lion.scene);
             newBox_00.renderingGroupId = 2;
 
             newBox_00.material = new Fuxny.Lion.StandardMaterial("mat", Fuxny.Lion.scene);
             newBox_00.material.diffuseColor = new Fuxny.Lion.Color3(1, 1, 1);
             newBox_00.material.emissiveColor = new Fuxny.Lion.Color3(1, 1, 1);
-            newBox_00.name = '_';
-            newBox_00.id = '__' + eId;
+            newBox_00.name = '_hitbox';
+            newBox_00.id = '__hitbox_' + playerId;
 
             let defaultPosition = new newBox_00.position.constructor(0, 0.32, 0);
             newBox_00.position = defaultPosition.clone();
@@ -914,7 +898,8 @@ function triggerXPDuper() {
             newBox_00.material.alpha = 0.5;
             newBox_00.isVisible = hitBoxEnabled;
 
-            rendering.attachTransformNode(newBox_00, key, 13);
+            const transformNodeKey = playerId.toString();
+            rendering.attachTransformNode(newBox_00, transformNodeKey, 13);
             r.values(Fuxny.rendering)[27].call(Fuxny.rendering, newBox_00);
 
             Object.defineProperty(newBox_00._nodeDataStorage, '_isEnabled', {
@@ -923,71 +908,52 @@ function triggerXPDuper() {
                 configurable: false
             });
 
-            hitboxes[eId] = newBox_00;
+            hitboxes[playerId] = newBox_00;
         }
 
-        // Cleanup hitboxes of players no longer present
+        // Cleanup hitboxes for players who have left
         for (const eId in hitboxes) {
-            if (!activeEIds.has(eId)) {
+            if (!activeEIds.has(parseInt(eId))) {
                 hitboxes[eId]?.dispose();
                 delete hitboxes[eId];
             }
         }
 
-        // Visibility toggle based on node[0].enabled and hitBoxEnabled
-        for (const key in objectData) {
-            const obj = objectData[key];
-            const eId = obj?.[eIdKey];
-            if (!eId || !hitboxes[eId]) continue;
-
-            const baseNode = obj.nodes?.[0];
-            if (!baseNode) continue;
-
-            hitboxes[eId].isVisible = baseNode.enabled && hitBoxEnabled;
+        // Toggle visibility for all active hitboxes
+        for (const eId in hitboxes) {
+            if (hitboxes[eId]) {
+                hitboxes[eId].isVisible = hitBoxEnabled;
+            }
         }
     }
 
     function startHealthWatcher() {
-        everEnabled.enemyHealthGuiEnabled = true;
         if (healthWatcherInterval) clearInterval(healthWatcherInterval);
 
         healthWatcherInterval = setInterval(() => {
-            const list = Fuxny.entities[Fuxny.impKey].entityName.list;
-            let percent = null;
-            let foundTarget = false;
-
-
-            for (let i = 0; i < list.length; i++) {
-                const targetEntity = list[i];
-                if (r.values(targetEntity)[0] === lastClosestId) {
-                    percent = r.values(targetEntity)[7];
-                    foundTarget = true;
-                    break;
-                }
-            }
-
-            // Hide health bar if not found, or at full/near full
-            if (!foundTarget || percent === 0 || percent >= 1) { // ) {
-                if (resetTimeout) {
-                    clearTimeout(resetTimeout)
-                };
-                setHealthBar(100, false);
-                lastPercent = null;
+            if (!injectedBool || !lastClosestId) {
+                setHealthBar(100, false); // Hide bar if no target
                 return;
             }
 
-            // Update bar only if changed
-            if (percent !== null) {
-                lastPercent = percent;
-                lastChangeTime = Date.now();
-                setHealthBar(percent * 100, true);
-
-                if (resetTimeout) clearTimeout(resetTimeout);
-                resetTimeout = setTimeout(() => {
-                    setHealthBar(100, false);
-                    lastPercent = null;
-                }, 10000);
+            const state = Fuxny.entities.getState(lastClosestId, "genericLifeformState");
+            if (!state || !state.isAlive) {
+                setHealthBar(100, false);
+                return;
             }
+
+            // This is an assumption based on common game engine patterns.
+            // The old method was obfuscated and has broken.
+            const health = state.health;
+            const maxHealth = state.maxHealth;
+
+            if (typeof health === 'number' && typeof maxHealth === 'number' && maxHealth > 0) {
+                const percent = (health / maxHealth) * 100;
+                setHealthBar(percent, true);
+            } else {
+                setHealthBar(100, false);
+            }
+
         }, 300);
     }
 
@@ -1327,112 +1293,53 @@ function triggerXPDuper() {
         }
 
         function startTargetFinder() {
-            let armourNodeNum = r.values(Fuxny.rendering)[18].getNamedNode(1, "Body|Armour")
-            let closestObj = null;
-            targetFinderId = setInterval(() => {
-                if (!injectedBool) {
+            if (targetFinderId) clearInterval(targetFinderId);
 
-                    console.log("NOT INJECTED NO TARGET")
+            targetFinderId = setInterval(() => {
+                if (!injectedBool || !Fuxny.entities) return;
+
+                if (!Fuxny.entities.getState(myId, "genericLifeformState")?.isAlive) {
+                    lastClosestId = null;
+                    return;
                 }
 
-                if (!Fuxny.entities.getState(1, "genericLifeformState").isAlive) return;
-
-                const myPos = Fuxny.entities.getState?.(myId, 'position')?.position;
+                const myPos = Fuxny.entities.getState(myId, 'position')?.position;
                 if (!myPos) return;
 
-                const rendering = r.values(Fuxny.rendering)[18];
-                const objectData = rendering?.objectData;
-                if (!objectData) return;
-
-                if (!eIdKey) return;
+                const playerIds = n.noa.playerList;
+                if (!playerIds) return;
 
                 let closestId = null;
-                let minDist = 100;
+                let minDist = 100; // Max distance squared (10 blocks)
 
-
-                for (const key in objectData) {
-                    const obj = objectData[key];
-                    const eId = obj[eIdKey];
-
-                    if (
-                        eId == null ||
-                        obj.type !== "Player" ||
-                        obj.pickable === false ||
-                        eId === myId ||
-                        !Fuxny.entities.getState(eId, "genericLifeformState") ||
-                        !Fuxny.entities.getState(eId, "genericLifeformState").isAlive
-                    ) continue;
-
-
-                    if (!eId || eId === myId || obj.pickable === false || obj.type !== "Player") continue;
-
-                    const state = Fuxny.entities.getState(eId, "genericLifeformState");
-                    if (!state || !state.isAlive) continue;
-
-                    const ent = r.values(Fuxny.entityList)?.[1]?.[eId];
-                    if (!ent || ent.canAttack !== true) continue;
-
-                    const pos = Fuxny.entities.getState(eId, 'position')?.position;
+                for (const playerId of playerIds) {
+                    const pos = Fuxny.entities.getState(playerId, 'position')?.position;
                     if (!pos) continue;
 
-                    const dx = pos[0] - myPos[0];
-                    const dy = pos[1] - myPos[1];
-                    const dz = pos[2] - myPos[2];
+                    const state = Fuxny.entities.getState(playerId, "genericLifeformState");
+                    if (!state || !state.isAlive) continue;
 
-                    if (Math.abs(dy) > 3) continue; // optional Y-axis restriction
-
-                    const dist = dx * dx + dy * dy + dz * dz;
+                    const dist = S.distanceBetween(myPos, pos);
                     if (dist < minDist) {
                         minDist = dist;
-                        closestId = eId;
-                        closestObj = obj;
+                        closestId = playerId;
                     }
-
                 }
 
-                const armourNode = closestObj?.nodes?.[armourNodeNum];
-                if (armourNode?.actuallyEnabled) {
-                    newBox.name = possibleNames[1];
-                    newBox.id = possibleNames[1];
-                } else {
-                    newBox.name = possibleNames[0];
-                    newBox.id = possibleNames[0];
-                }
-
-
-                if (closestId != null) {
-                    if (!newBox.metadata) newBox.metadata = {};
-                    newBox.metadata.eId = closestId;
-                    //console.log(newBox.id,"  ",closestId)
-                    if (closestId !== lastClosestId) {
-                        if (hitboxes[closestId]) {
-                            hitboxes[closestId].material.diffuseColor = new Fuxny.Lion.Color3(1, 0, 0);
-                            hitboxes[closestId].material.emissiveColor = new Fuxny.Lion.Color3(1, 0, 0);
-                            for (const id in hitboxes) {
-                                if (id !== closestId && hitboxes[id]) {
-                                    hitboxes[id].material.diffuseColor = new Fuxny.Lion.Color3(1, 1, 1);
-                                    hitboxes[id].material.emissiveColor = new Fuxny.Lion.Color3(1, 1, 1);
-                                }
-                            }
-                        }
-
-                        lastClosestId = closestId;
+                if (lastClosestId !== closestId) {
+                    if (hitboxes[lastClosestId]) { // Revert old target color
+                         hitboxes[lastClosestId].material.diffuseColor = new Fuxny.Lion.Color3(1, 1, 1);
+                         hitboxes[lastClosestId].material.emissiveColor = new Fuxny.Lion.Color3(1, 1, 1);
                     }
-                } else {
-                    lastClosestId = null;
+                    if (hitboxes[closestId]) { // Highlight new target
+                        hitboxes[closestId].material.diffuseColor = new Fuxny.Lion.Color3(1, 0, 0);
+                        hitboxes[closestId].material.emissiveColor = new Fuxny.Lion.Color3(1, 0, 0);
+                    }
                 }
 
-                // Final visibility and distance logic
-                if (killAuraEnabled && closestId != null && minDist < 16) { //16 for now
-                    newBox[__nullKey] = true;
-                    targetEntityDistance = Math.floor(Math.sqrt(minDist));
-                } else {
-                    newBox[__nullKey] = false;
-                    targetEntityDistance = null;
-                }
+                lastClosestId = closestId;
 
-
-            }, 100);
+            }, 200);
         }
         inject();
         setupKillAuraBox();
@@ -1717,6 +1624,7 @@ function triggerXPDuper() {
 
             <div class="spectra-category hidden" data-tab-content="settings">
                 <div class="spectra-category-title">Settings</div>
+                <div class="spectra-toggle"><label>Anti-Ban (Safer)</label><input type="checkbox" id="hack-anti-ban"></div>
                 <button class="spectra-button" id="hack-health-color">Set Health Color</button>
                 <button class="spectra-button" id="hack-ranks">Spoof Ranks</button>
                 <button class="spectra-button" id="hack-player-coords">Show Player Coords</button>
@@ -1819,9 +1727,10 @@ function triggerXPDuper() {
         }
         tryKill() {
             let myPos = n.noa.getPosition(1);
+            const killRadius = antiBanEnabled ? 4.5 : 7;
             n.noa.playerList.forEach(playerId => {
                 let enemyPos = n.noa.getPosition(playerId);
-                if (enemyPos && parseFloat(S.distanceBetweenSqrt(myPos, enemyPos)) <= 7) {
+                if (enemyPos && S.distanceBetweenSqrt(myPos, enemyPos) <= killRadius) {
                     let vector = S.normalizeVector([enemyPos[0] - myPos[0], enemyPos[1] - myPos[1], enemyPos[2] - myPos[2]]);
                     n.noa.doAttack(vector, playerId.toString(), "BodyMesh");
                     n.noa.getHeldItem(1)?.trySwingBlock?.();
@@ -2280,6 +2189,11 @@ function triggerXPDuper() {
         });
 
         // --- Settings ---
+        document.getElementById('hack-anti-ban')?.addEventListener('change', e => {
+            antiBanEnabled = e.target.checked;
+            showTemporaryNotification(`Anti-Ban Mode ${antiBanEnabled ? 'ENABLED' : 'DISABLED'}`);
+        });
+
         document.getElementById('hack-health-color')?.addEventListener('click', () => {
              const healthBar = document.getElementsByClassName("BottomScreenStatBar")[0];
              if (healthBar) {
