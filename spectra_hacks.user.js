@@ -18,11 +18,6 @@
 
     const TITLE = "Midnight__" //-----------------------Title
 
-    // Aimbot Configuration
-    const MAX_TARGET_DISTANCE = 100;
-    const AIM_SMOOTHNESS = 0.15;
-    const TARGET_UPDATE_INTERVAL = 50;
-    const NOTIFICATION_DURATION = 2000;
 
     const changeHealthBar = true // --------------------Change health bar color to gradient color
     const spoofRanksEnabled = true; // -----------------Gives you all ranks (YT, Super, Developer)
@@ -37,8 +32,6 @@
     let sendBytesName = null;
     let gameObjects = {};
     let injectedBool = false;
-    let aimbotEnabled = false;
-    let targetInterval = null;
     let myId = 1
     let isInitializing = true;
     let clientOptions = null;
@@ -146,7 +139,7 @@
 
 
     const scannedChunks = new Set();
-    let chunkStructure = null;
+    let chunkDataField = null;
 
     // ETC
     let playerKey = null;
@@ -235,116 +228,6 @@
     };
 
 
-    function calculateAngle(from, to) {
-        const dx = to[0] - from[0];
-        const dy = to[1] - from[1];
-        const dz = to[2] - from[2];
-        const yaw = Math.atan2(dx, dz);
-        const horizontalDistance = Math.sqrt(dx * dx + dz * dz);
-        const pitch = -Math.atan2(dy, horizontalDistance);
-        return { yaw, pitch };
-    }
-
-    function lerpAngle(current, target, factor) {
-        let diff = target - current;
-        if (diff > Math.PI) diff -= 2 * Math.PI;
-        if (diff < -Math.PI) diff += 2 * Math.PI;
-        return current + diff * factor;
-    }
-
-    function findAndAimAtTarget() {
-    if (!Fuxny.noa || !Fuxny.camera || !Fuxny.entities) return;
-        try {
-        if (!Fuxny.entities.getState(myId, "genericLifeformState")?.isAlive) return;
-        const myPos = Fuxny.entities.getState(myId, 'position')?.position;
-            if (!myPos) return;
-
-        const playerIds = n.noa.playerList;
-        if (!playerIds) return;
-
-            let closestId = null;
-            let minDist = MAX_TARGET_DISTANCE * MAX_TARGET_DISTANCE;
-            let targetPos = null;
-
-        for (const playerId of playerIds) {
-            if (playerId === myId) continue;
-
-            const state = Fuxny.entities.getState(playerId, "genericLifeformState");
-                if (!state || !state.isAlive) continue;
-
-            const pos = Fuxny.entities.getState(playerId, 'position')?.position;
-                if (!pos) continue;
-
-                const dx = pos[0] - myPos[0];
-                const dy = pos[1] - myPos[1];
-                const dz = pos[2] - myPos[2];
-
-                if (Math.abs(dy) > 5) continue;
-
-                const distSquared = dx * dx + dy * dy + dz * dz;
-                if (distSquared < minDist) {
-                    minDist = distSquared;
-                closestId = playerId;
-                    targetPos = pos;
-                }
-            }
-
-            if (closestId !== lastClosestId) {
-                lastClosestId = closestId;
-                if (closestId) {
-                    targetEntityDistance = Math.floor(Math.sqrt(minDist));
-                    showTemporaryNotification(`🎯 Targeting player ${closestId} (${targetEntityDistance}m)`);
-                } else {
-                    targetEntityDistance = null;
-                }
-            }
-
-        if (closestId && targetPos && Fuxny.camera) {
-                const aimPos = [targetPos[0], targetPos[1] + 1.6, targetPos[2]];
-                const targetAngles = calculateAngle(myPos, aimPos);
-            let currentYaw = Fuxny.camera.heading;
-            let currentPitch = Fuxny.camera.pitch;
-
-                if (currentYaw !== undefined && currentPitch !== undefined) {
-                    const newYaw = lerpAngle(currentYaw, targetAngles.yaw, AIM_SMOOTHNESS);
-                    const newPitch = lerpAngle(currentPitch, targetAngles.pitch, AIM_SMOOTHNESS);
-                    try {
-                    Fuxny.camera.heading = newYaw;
-                    Fuxny.camera.pitch = newPitch;
-                    } catch (cameraError) {
-                        console.warn("[Aimbot] Camera control error:", cameraError);
-                    }
-                } else {
-                    console.warn("[Aimbot] Could not access camera angles");
-                }
-            }
-        } catch (error) {
-            console.error("[Aimbot] Error in findAndAimAtTarget:", error);
-        }
-    }
-
-    function enableAimbot() {
-        if (!injectedBool) {
-            showTemporaryNotification("❌ Game not properly injected");
-            return false;
-        }
-        aimbotEnabled = true;
-        targetInterval = setInterval(findAndAimAtTarget, TARGET_UPDATE_INTERVAL);
-        showTemporaryNotification("🎯 Aimbot ENABLED");
-        return true;
-    }
-
-    function disableAimbot() {
-        aimbotEnabled = false;
-        if (targetInterval) {
-            clearInterval(targetInterval);
-            targetInterval = null;
-        }
-        lastClosestId = null;
-        targetEntityDistance = null;
-        showTemporaryNotification("❌ Aimbot DISABLED");
-        return true;
-    }
 
     function fadeVolume(from, to, duration) {
         const steps = 30;
@@ -478,38 +361,25 @@
         return `${cx}|${cy}|${cz}|overworld`;
     }
 
-function autoDetectChunkStructure(chunk) {
-    for (const key of Object.keys(chunk)) {
-        const potentialHolder = chunk[key];
-        if (!potentialHolder || typeof potentialHolder !== 'object') continue;
+    function scanChunk(chunk, blockIDs) {
+        const blockData = chunk[chunkDataField];
+        if (!blockData) return;
 
-        const propNames = Object.keys(potentialHolder);
-        if (propNames.length < 2) continue;
+        const {
+            data,
+            stride
+        } = blockData;
 
-        const dataKey = propNames.find(p => {
-            const val = potentialHolder[p];
-            return (Array.isArray(val) || ArrayBuffer.isView(val)) && val.length > 1000;
-        });
+        const pos = chunk.pos || [0, 0, 0];
+        if (!data || !stride) return;
 
-        const strideKey = propNames.find(p => {
-            const val = potentialHolder[p];
-            return Array.isArray(val) && val.length === 3 && typeof val[0] === 'number';
-        });
-
-        if (dataKey && strideKey) {
-            console.log(`✅ Detected chunk structure. Holder: ${key}, Data: ${dataKey}, Stride: ${strideKey}`);
-            chunkStructure = { holder: key, data: dataKey, stride: strideKey };
-            return chunkStructure;
-        }
-    }
-    console.warn("❌ Failed to auto-detect chunk structure");
-    return null;
-}
-
-function scanChunk(chunkKey, pos, stride, data, blockIDs) {
+        const chunkKey = getChunkKey(chunk);
         for (let i = 0; i < data.length; i++) {
             const blockID = data[i];
             if (!blockIDs.includes(blockID)) continue;
+
+
+
 
             const [x, y, z] = reverseIndex(i, stride);
             const worldX = pos[0] + x + 0.5;
@@ -519,74 +389,78 @@ function scanChunk(chunkKey, pos, stride, data, blockIDs) {
             const mesh = Fuxny.Lion.Mesh.CreateBox("espbox", 0.5, false, 1, Fuxny.Lion.scene);
             mesh.position.set(worldX, worldY, worldZ);
             mesh.renderingGroupId = 1;
-        mesh.material = new Fuxny.Lion.StandardMaterial("mat", Fuxny.Lion.scene);
+
+            mesh.material = new Fuxny.Lion.StandardMaterial("mat", Fuxny.Lion.scene)
 
             const id = Fuxny.entities.add([worldX, worldY, worldZ], null, null, mesh);
             if (!chestBoxes[chunkKey]) chestBoxes[chunkKey] = [];
-        chestBoxes[chunkKey].push({ mesh, id });
+            chestBoxes[chunkKey].push({
+                mesh,
+                id
+            });
+
 
             if ([204, 205, 206, 207].includes(blockID)) {
-            mesh.material.diffuseColor = new Fuxny.Lion.Color3(1, 0.5, 0);
-            mesh.material.emissiveColor = new Fuxny.Lion.Color3(1, 0.5, 0);
-        }
-        if (blockID === 44) { // Gold
-            mesh.material.diffuseColor = new Fuxny.Lion.Color3(1, 1, 0);
-            mesh.material.emissiveColor = new Fuxny.Lion.Color3(1, 1, 0);
+                console.log("FOUNDCHEST")
+
+                mesh.material.diffuseColor = new Fuxny.Lion.Color3(1, 0.5, 0); // orange
+                mesh.material.emissiveColor = new Fuxny.Lion.Color3(1, 0.5, 0); // makes it glow orange
             }
-        if (blockID === 45) { // Diamond
-            mesh.material.diffuseColor = new Fuxny.Lion.Color3(0, 1, 1);
-            mesh.material.emissiveColor = new Fuxny.Lion.Color3(0, 1, 1);
+            if (blockID === 45) {
+                mesh.material.diffuseColor = new Fuxny.Lion.Color3(0, 0, 1); // blue
+                mesh.material.emissiveColor = new Fuxny.Lion.Color3(0, 0, 1); // makes it glow blue
             }
-        if (blockID === 465) { // Amethyst
-            mesh.material.diffuseColor = new Fuxny.Lion.Color3(0.7, 0.5, 1);
-            mesh.material.emissiveColor = new Fuxny.Lion.Color3(0.7, 0.5, 1);
+
+            if (blockID === 465) {
+                mesh.material.diffuseColor = new Fuxny.Lion.Color3(0.7, 0.5, 1); // pale purple
+                mesh.material.emissiveColor = new Fuxny.Lion.Color3(0.7, 0.5, 1); // makes it glow pale purple
             }
+
+
+
+
         }
     }
 
     function scanAllChunks() {
         if (!Fuxny?.world || !Fuxny?.world?.[Fuxny.impKey]?.hash) return;
         const chunkHash = Fuxny.world[Fuxny.impKey].hash;
-
+        // Step 1: Remove boxes for chunks no longer loaded
         for (const scannedKey of scannedChunks) {
             if (!(scannedKey in chestBoxes)) continue;
+
             if (!Object.values(chunkHash).some(chunk => getChunkKey(chunk) === scannedKey)) {
-            for (const { mesh, id } of chestBoxes[scannedKey]) {
-                mesh.dispose();
-                Fuxny.entities.deleteEntity(id);
+                // Delete all meshes for this chunk
+                for (const {
+                        mesh,
+                        id
+                    } of chestBoxes[scannedKey]) {
+                    mesh.dispose(); // remove from scene
+                    Fuxny.entities.deleteEntity(id); // remove from entity system if needed
                 }
                 delete chestBoxes[scannedKey];
                 scannedChunks.delete(scannedKey);
             }
         }
 
+        // Step 2: Scan newly loaded chunks
         for (const chunkKey in chunkHash) {
+
             const chunk = chunkHash[chunkKey];
-        if (!chunkStructure) {
-            autoDetectChunkStructure(chunk);
-            if (!chunkStructure) continue;
+            if (!chunkDataField) {
+                autoDetectChunkDataField(chunk);
+                if (!chunkDataField) continue; // Skip if still not found
             }
 
-        const blockDataHolder = chunk[chunkStructure.holder];
-        if (!blockDataHolder) continue;
+            const blockData = chunk[chunkDataField];
+            if (!blockData?.data || !blockData.stride || !chunk.pos) continue;
 
-        const data = blockDataHolder[chunkStructure.data];
-        const stride = blockDataHolder[chunkStructure.stride];
-        const pos = chunk.pos;
-
-        if (!data || !stride || !pos) continue;
 
             const key = getChunkKey(chunk);
             if (scannedChunks.has(key)) continue;
             scannedChunks.add(key);
-
-        const blockIDsToScan = [];
-        if (chestESPEnabled) blockIDsToScan.push(204, 205, 206, 207);
-        if (oreESPEnabled) blockIDsToScan.push(44, 45, 465, 50);
-
-        if (blockIDsToScan.length > 0) {
-            scanChunk(key, pos, stride, data, blockIDsToScan);
-        }
+            if (chestESPEnabled) scanChunk(chunk, [204, 205, 206, 207]);
+            if (oreESPEnabled) scanChunk(chunk, [44, 45, 465, 50]);
         }
     }
 
@@ -994,39 +868,53 @@ function triggerXPDuper() {
 }
 
     function makeHitboxes() {
-    if (!injectedBool || !Fuxny.rendering) return;
+        if (!injectedBool) {
+            console.log("NOT INJECTED NO TARGET");
+            return;
+        }
 
         const rendering = r.values(Fuxny.rendering)[18];
-    if (!rendering) return;
+        const objectData = rendering?.objectData;
+        if (!objectData || !eIdKey) return;
 
-    const playerIds = n.noa.playerList;
-    if (!playerIds) return;
+        const activeEIds = new Set();
 
-    const activeEIds = new Set(playerIds);
+        // First, build a set of currently valid entity IDs
+        for (const key in objectData) {
+            if (key === "1") continue;
+            const obj = objectData[key];
+            const eId = obj[eIdKey];
 
-    // Create hitboxes for new players
-    for (const playerId of playerIds) {
-        if (hitboxes[playerId]) continue; // Skip if hitbox already exists
+            if (
+                eId == null ||
+                eId === myId ||
+                obj.pickable === false ||
+                obj.type !== "Player" ||
+                !Fuxny.entities.getState(eId, "genericLifeformState")
+            ) continue;
 
-        // Create the hitbox mesh
-        let newBox_00 = Fuxny.Lion.Mesh.CreateBox("hitbox_mesh_" + playerId, 1, false, 1, Fuxny.Lion.scene);
+            activeEIds.add(eId);
+
+            // If hitbox already exists, skip
+            if (hitboxes[eId]) continue;
+
+            // Create the hitbox
+            let newBox_00 = Fuxny.Lion.Mesh.CreateBox("mesh", 1, false, 1, Fuxny.Lion.scene);
             newBox_00.renderingGroupId = 2;
 
             newBox_00.material = new Fuxny.Lion.StandardMaterial("mat", Fuxny.Lion.scene);
             newBox_00.material.diffuseColor = new Fuxny.Lion.Color3(1, 1, 1);
             newBox_00.material.emissiveColor = new Fuxny.Lion.Color3(1, 1, 1);
-        newBox_00.name = '_hitbox';
-        newBox_00.id = '__hitbox_' + playerId;
+            newBox_00.name = '_';
+            newBox_00.id = '__' + eId;
 
             let defaultPosition = new newBox_00.position.constructor(0, 0.32, 0);
             newBox_00.position = defaultPosition.clone();
             newBox_00._scaling._y = 2.2;
             newBox_00.material.alpha = 0.5;
-        newBox_00.isVisible = hitBoxEnabled; // Simplified visibility
+            newBox_00.isVisible = hitBoxEnabled;
 
-        // Attach to the player's transform node using player ID as key
-        const transformNodeKey = playerId.toString();
-        rendering.attachTransformNode(newBox_00, transformNodeKey, 13);
+            rendering.attachTransformNode(newBox_00, key, 13);
             r.values(Fuxny.rendering)[27].call(Fuxny.rendering, newBox_00);
 
             Object.defineProperty(newBox_00._nodeDataStorage, '_isEnabled', {
@@ -1035,22 +923,27 @@ function triggerXPDuper() {
                 configurable: false
             });
 
-        hitboxes[playerId] = newBox_00;
+            hitboxes[eId] = newBox_00;
         }
 
-    // Cleanup hitboxes for players who have left
+        // Cleanup hitboxes of players no longer present
         for (const eId in hitboxes) {
-        if (!activeEIds.has(parseInt(eId))) {
+            if (!activeEIds.has(eId)) {
                 hitboxes[eId]?.dispose();
                 delete hitboxes[eId];
             }
         }
 
-    // Toggle visibility for all active hitboxes
-    for (const eId in hitboxes) {
-        if (hitboxes[eId]) {
-            hitboxes[eId].isVisible = hitBoxEnabled;
-        }
+        // Visibility toggle based on node[0].enabled and hitBoxEnabled
+        for (const key in objectData) {
+            const obj = objectData[key];
+            const eId = obj?.[eIdKey];
+            if (!eId || !hitboxes[eId]) continue;
+
+            const baseNode = obj.nodes?.[0];
+            if (!baseNode) continue;
+
+            hitboxes[eId].isVisible = baseNode.enabled && hitBoxEnabled;
         }
     }
 
@@ -1363,34 +1256,6 @@ function triggerXPDuper() {
 
             cachedNameTagParent = Fuxny.Lion.scene
 
-            // --- Aimbot Injection Logic ---
-            gameObjects.noa = Fuxny.noa;
-            gameObjects.entities = Fuxny.entities;
-            gameObjects.rendering = Fuxny.rendering;
-            gameObjects.camera = Fuxny.camera;
-            gameObjects.entityList = r.values(Fuxny.noa)[30];
-            const aimbot_targetValue = r.values(Fuxny.entities)[2];
-            const aimbot_entityEntries = Object.entries(Fuxny.entities);
-            gameObjects.impKey = aimbot_entityEntries.find(([_, val]) => val === aimbot_targetValue)?.[0];
-            if (!eIdKey) { // eIdKey is already found by Fuxny's injection, but as a fallback:
-                 const rendering = r.values(Fuxny.rendering)[18];
-                 const objectData = rendering?.objectData;
-                 if (objectData) {
-                    for (const key in objectData) {
-                        const obj = objectData[key];
-                        if (obj && typeof obj === 'object') {
-                            for (const prop in obj) {
-                                if (typeof obj[prop] === 'number' && obj[prop] > 0 && obj[prop] < 1000) {
-                                    eIdKey = prop;
-                                    break;
-                                }
-                            }
-                            if (eIdKey) break;
-                        }
-                    }
-                }
-            }
-            // --- End Aimbot Injection ---
 
             injectedBool = true;
         }
@@ -1575,13 +1440,13 @@ function triggerXPDuper() {
         setInterval(makeHitboxes, 1000);
     }
 
-    window.addEventListener('load', () => {
-        console.log('Window loaded, attempting injection.');
+    waitForElement('div.MainLoadingState.FullyFancyText', (el) => {
+        console.log('Target div appeared:', el);
         performInjection();
         if (!injectedBool) {
-            showTemporaryNotification("Injection failed. Please reload.");
+            showTemporaryNotification("injection failed");
         } else {
-            showTemporaryNotification("Injection successful!");
+            showTemporaryNotification("injection successful");
         }
     });
 
@@ -1813,7 +1678,6 @@ function triggerXPDuper() {
         <div id="spectra-content">
             <div class="spectra-category" data-tab-content="main">
                 <div class="spectra-category-title">Main</div>
-                <div class="spectra-toggle"><label>Aimbot</label><input type="checkbox" id="hack-aimbot"></div>
                 <div class="spectra-toggle"><label>Killaura</label><input type="checkbox" id="hack-killaura"></div>
                 <div class="spectra-toggle"><label>Spider</label><input type="checkbox" id="hack-spider"></div>
                 <div class="spectra-toggle"><label>Jesus</label><input type="checkbox" id="hack-jesus"></div>
@@ -2061,15 +1925,6 @@ function triggerXPDuper() {
         setupButton('hack-unban', newHacks.unban);
 
         // --- Wire up Old Hacks ---
-        document.getElementById('hack-aimbot')?.addEventListener('change', e => {
-            if (!preCheck("Aimbot", e.target)) return;
-            if (e.target.checked) {
-                enableAimbot();
-            } else {
-                disableAimbot();
-            }
-        });
-
         // Note: The old "Kill Aura" is replaced by the new one.
         document.getElementById('hack-bhop')?.addEventListener('change', e => {
             if (!preCheck("BHOP", e.target)) return;
