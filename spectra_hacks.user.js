@@ -18,6 +18,12 @@
 
     const TITLE = "Midnight__" //-----------------------Title
 
+    // Aimbot Configuration
+    const MAX_TARGET_DISTANCE = 100;
+    const AIM_SMOOTHNESS = 0.15;
+    const TARGET_UPDATE_INTERVAL = 50;
+    const NOTIFICATION_DURATION = 2000;
+
     const changeHealthBar = true // --------------------Change health bar color to gradient color
     const spoofRanksEnabled = true; // -----------------Gives you all ranks (YT, Super, Developer)
     const ATTACK_INTERVAL_MS = 20; // -----------------How fast to hit players with triggerbot/killAura    LOW = BAN
@@ -29,7 +35,10 @@
     let alreadyConnected = null;
     let colyRoom = null;
     let sendBytesName = null;
+    let gameObjects = {};
     let injectedBool = false;
+    let aimbotEnabled = false;
+    let targetInterval = null;
     let myId = 1
     let isInitializing = true;
     let clientOptions = null;
@@ -225,6 +234,111 @@
         }
     };
 
+
+    function calculateAngle(from, to) {
+        const dx = to[0] - from[0];
+        const dy = to[1] - from[1];
+        const dz = to[2] - from[2];
+        const yaw = Math.atan2(dx, dz);
+        const horizontalDistance = Math.sqrt(dx * dx + dz * dz);
+        const pitch = -Math.atan2(dy, horizontalDistance);
+        return { yaw, pitch };
+    }
+
+    function lerpAngle(current, target, factor) {
+        let diff = target - current;
+        if (diff > Math.PI) diff -= 2 * Math.PI;
+        if (diff < -Math.PI) diff += 2 * Math.PI;
+        return current + diff * factor;
+    }
+
+    function findAndAimAtTarget() {
+        if (!gameObjects.entities || !gameObjects.impKey || !gameObjects.camera) return;
+        try {
+            if (!gameObjects.entities.getState(1, "genericLifeformState")?.isAlive) return;
+            const myPos = gameObjects.entities.getState(myId, 'position')?.position;
+            if (!myPos) return;
+            const rendering = r.values(gameObjects.rendering)[18];
+            const objectData = rendering?.objectData;
+            if (!objectData || !eIdKey) return;
+            let closestId = null;
+            let minDist = MAX_TARGET_DISTANCE * MAX_TARGET_DISTANCE;
+            let targetPos = null;
+            for (const key in objectData) {
+                const obj = objectData[key];
+                const eId = obj[eIdKey];
+                if (eId == null || obj.type !== "Player" || obj.pickable === false || eId === myId || !gameObjects.entities.getState(eId, "genericLifeformState") || !gameObjects.entities.getState(eId, "genericLifeformState").isAlive) continue;
+                const state = gameObjects.entities.getState(eId, "genericLifeformState");
+                if (!state || !state.isAlive) continue;
+                const ent = r.values(gameObjects.entityList)?.[1]?.[eId];
+                if (!ent || ent.canAttack !== true) continue;
+                const pos = gameObjects.entities.getState(eId, 'position')?.position;
+                if (!pos) continue;
+                const dx = pos[0] - myPos[0];
+                const dy = pos[1] - myPos[1];
+                const dz = pos[2] - myPos[2];
+                if (Math.abs(dy) > 5) continue;
+                const distSquared = dx * dx + dy * dy + dz * dz;
+                if (distSquared < minDist) {
+                    minDist = distSquared;
+                    closestId = eId;
+                    targetPos = pos;
+                }
+            }
+            if (closestId !== lastClosestId) {
+                lastClosestId = closestId;
+                if (closestId) {
+                    targetEntityDistance = Math.floor(Math.sqrt(minDist));
+                    showTemporaryNotification(`🎯 Targeting player ${closestId} (${targetEntityDistance}m)`);
+                } else {
+                    targetEntityDistance = null;
+                }
+            }
+            if (closestId && targetPos && gameObjects.camera) {
+                const aimPos = [targetPos[0], targetPos[1] + 1.6, targetPos[2]];
+                const targetAngles = calculateAngle(myPos, aimPos);
+                let currentYaw = gameObjects.camera.heading;
+                let currentPitch = gameObjects.camera.pitch;
+                if (currentYaw !== undefined && currentPitch !== undefined) {
+                    const newYaw = lerpAngle(currentYaw, targetAngles.yaw, AIM_SMOOTHNESS);
+                    const newPitch = lerpAngle(currentPitch, targetAngles.pitch, AIM_SMOOTHNESS);
+                    try {
+                        gameObjects.camera.heading = newYaw;
+                        gameObjects.camera.pitch = newPitch;
+                    } catch (cameraError) {
+                        console.warn("[Aimbot] Camera control error:", cameraError);
+                    }
+                } else {
+                    console.warn("[Aimbot] Could not access camera angles");
+                }
+            }
+        } catch (error) {
+            console.error("[Aimbot] Error in findAndAimAtTarget:", error);
+        }
+    }
+
+    function enableAimbot() {
+        if (!injectedBool) {
+            showTemporaryNotification("❌ Game not properly injected");
+            return false;
+        }
+        aimbotEnabled = true;
+        targetInterval = setInterval(findAndAimAtTarget, TARGET_UPDATE_INTERVAL);
+        showTemporaryNotification("🎯 Aimbot ENABLED");
+        return true;
+    }
+
+    function disableAimbot() {
+        aimbotEnabled = false;
+        if (targetInterval) {
+            clearInterval(targetInterval);
+            targetInterval = null;
+        }
+        lastClosestId = null;
+        targetEntityDistance = null;
+        showTemporaryNotification("❌ Aimbot DISABLED");
+        return true;
+    }
 
     function fadeVolume(from, to, duration) {
         const steps = 30;
@@ -1212,6 +1326,36 @@
 
 
             cachedNameTagParent = Fuxny.Lion.scene
+
+            // --- Aimbot Injection Logic ---
+            gameObjects.noa = Fuxny.noa;
+            gameObjects.entities = Fuxny.entities;
+            gameObjects.rendering = Fuxny.rendering;
+            gameObjects.camera = Fuxny.camera;
+            gameObjects.entityList = r.values(Fuxny.noa)[30];
+            const aimbot_targetValue = r.values(Fuxny.entities)[2];
+            const aimbot_entityEntries = Object.entries(Fuxny.entities);
+            gameObjects.impKey = aimbot_entityEntries.find(([_, val]) => val === aimbot_targetValue)?.[0];
+            if (!eIdKey) { // eIdKey is already found by Fuxny's injection, but as a fallback:
+                 const rendering = r.values(Fuxny.rendering)[18];
+                 const objectData = rendering?.objectData;
+                 if (objectData) {
+                    for (const key in objectData) {
+                        const obj = objectData[key];
+                        if (obj && typeof obj === 'object') {
+                            for (const prop in obj) {
+                                if (typeof obj[prop] === 'number' && obj[prop] > 0 && obj[prop] < 1000) {
+                                    eIdKey = prop;
+                                    break;
+                                }
+                            }
+                            if (eIdKey) break;
+                        }
+                    }
+                }
+            }
+            // --- End Aimbot Injection ---
+
             injectedBool = true;
         }
 
@@ -1633,6 +1777,7 @@
         <div id="spectra-content">
             <div class="spectra-category" data-tab-content="main">
                 <div class="spectra-category-title">Main</div>
+                <div class="spectra-toggle"><label>Aimbot</label><input type="checkbox" id="hack-aimbot"></div>
                 <div class="spectra-toggle"><label>Killaura</label><input type="checkbox" id="hack-killaura"></div>
                 <div class="spectra-toggle"><label>Spider</label><input type="checkbox" id="hack-spider"></div>
                 <div class="spectra-toggle"><label>Jesus</label><input type="checkbox" id="hack-jesus"></div>
@@ -1879,6 +2024,15 @@
         setupButton('hack-unban', newHacks.unban);
 
         // --- Wire up Old Hacks ---
+        document.getElementById('hack-aimbot')?.addEventListener('change', e => {
+            if (!preCheck("Aimbot", e.target)) return;
+            if (e.target.checked) {
+                enableAimbot();
+            } else {
+                disableAimbot();
+            }
+        });
+
         // Note: The old "Kill Aura" is replaced by the new one.
         document.getElementById('hack-bhop')?.addEventListener('change', e => {
             if (!preCheck("BHOP", e.target)) return;
