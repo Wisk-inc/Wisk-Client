@@ -161,6 +161,44 @@
 
 
 
+    var S = {
+        normalizeVector(t) { let e = t[0] * t[0] + t[1] * t[1] + t[2] * t[2]; if (e > 0) { let i = 1 / Math.sqrt(e); return [t[0] * i, t[1] * i, t[2] * i] } return t },
+        distanceBetween(t, e) { let i = e[0] - t[0], o = e[1] - t[1], s = e[2] - t[2]; return i * i + o * o + s * s },
+        distanceBetweenSqrt(t, e) { return Math.sqrt(this.distanceBetween(t, e)) },
+        lerp(t, e, i) { return t + (e - t) * i }
+    };
+    var D = {
+        fakeMouseEvent(t) {
+            let e = { button: 0, buttons: 1, clientX: Math.floor(Math.random() * 999 + 1), clientY: Math.floor(Math.random() * 999 + 1), screenX: Math.floor(Math.random() * 999 + 1), screenY: Math.floor(Math.random() * 999 + 1), target: document.querySelector("#noa-container"), type: t, isTrusted: !0, view: window, bubbles: !0, cancelable: !0, timeStamp: performance.now() };
+            return e.prototype = MouseEvent.prototype, e
+        }
+    };
+    var C = {
+        wpRequire: null, _cachedNoa: null,
+        get noa() { return this?._cachedNoa || (this._cachedNoa = r.values(this.bloxdProps).find(t => t?.entities)), this._cachedNoa },
+        init() {
+            let t = Object.getOwnPropertyDescriptors(window), e = Object.keys(t).find(s => t[s]?.set?.toString().includes("++")), i = window[e] = window[e], o = Math.floor(Math.random() * 9999999 + 1);
+            i.push([ [o], {}, s => this.wpRequire = s ]), this.bloxdProps = r.values(this.findModule("nonBlocksClient:")).find(s => typeof s == "object")
+        },
+        findModule(t) { let e = this.wpRequire.m; for (let i in e) { let o = e[i]; if (o && o.toString().includes(t)) return this.wpRequire(i) } return null }
+    }, l = C;
+    var I = {
+        getPosition(t) { return l.noa.entities.getState(t, "position").position },
+        get getMoveState() { return r.values(l.noa.entities)[36] },
+        getPhysicsBody(t) { return l.noa.entities.getState(t, "physics").body },
+        get registry() { return r.values(l.noa)[17] },
+        get getBlockSolidity() { return r.values(this.registry)[5] },
+        get getBlockID() { return l.noa.bloxd[Object.getOwnPropertyNames(l.noa.bloxd.constructor.prototype)[3]].bind(l.noa.bloxd) },
+        get getHeldItem() { return r.values(l.noa.entities).find(t => t?.length == 1 && t?.toString()?.length < 13 && t?.toString().includes(").")) },
+        safeGetHeldItem(t) { let e; try { e = this.getHeldItem(t) } catch {} return e },
+        get playerList() { return r.values(l.noa.bloxd.getPlayerIds()).filter(t => t !== 1 && this.safeGetHeldItem(t)).map(t => parseInt(t)) },
+        get doAttack() { let t = this.safeGetHeldItem(1); return (t?.doAttack || t.breakingItem.doAttack).bind(t) },
+        setVelocity(t = null, e = null, i = null) { let o = this.getPhysicsBody(1), s = r.values(o)[16]; t !== null && (s[0] = t), e !== null && (s[1] = e), i !== null && (s[2] = i) },
+        isAlive(t) { return r.values(l.noa.entities)[37](t).isAlive },
+        touchingWall() { let t = this.getPosition(1), e = .35, i = [ [0, 0, 0], [e, 0, 0], [-e, 0, 0], [0, 0, e], [0, 0, -e], [e, 0, e], [e, 0, -e], [-e, 0, e], [-e, 0, -e] ], o = [0, 1, 2]; for (let [s, c, d] of i) for (let u of o) { let m = Math.floor(t[0] + s), h = Math.floor(t[1] + c + u), E = Math.floor(t[2] + d), M = this.getBlockID(m, h, E); if (this.getBlockSolidity(M)) return !0 } return !1 }
+    };
+    var n = { noa: I, mouse: D };
+
     var r = { //WANG
         keys(e) {
             var t = [],
@@ -980,6 +1018,7 @@
 
 
     function performInjection() {
+        l.init();
         function inject() {
             let winDescriptors = Object.getOwnPropertyDescriptors(window);
             let wpName = Object.keys(winDescriptors).find(key => winDescriptors[key]?.set?.toString().includes("++"));
@@ -1594,7 +1633,9 @@
         <div id="spectra-content">
             <div class="spectra-category" data-tab-content="main">
                 <div class="spectra-category-title">Main</div>
-                <div class="spectra-toggle"><label>Kill Aura</label><input type="checkbox" id="hack-kill-aura"></div>
+                <div class="spectra-toggle"><label>Killaura</label><input type="checkbox" id="hack-killaura"></div>
+                <div class="spectra-toggle"><label>Spider</label><input type="checkbox" id="hack-spider"></div>
+                <div class="spectra-toggle"><label>Jesus</label><input type="checkbox" id="hack-jesus"></div>
                 <div class="spectra-toggle"><label>BHOP</label><input type="checkbox" id="hack-bhop"></div>
                 <div class="spectra-toggle"><label>Scaffold</label><input type="checkbox" id="hack-scaffold"></div>
                 <div class="spectra-toggle"><label>Walljump</label><input type="checkbox" id="hack-walljump"></div>
@@ -1604,6 +1645,7 @@
                 <div class="spectra-toggle"><label>BHOP Knife</label><input type="checkbox" id="hack-bhop-knife"></div>
                 <button class="spectra-button" id="hack-auto-sw">Auto SW</button>
                 <button class="spectra-button" id="hack-noclip-place">Noclip Place</button>
+                <button class="spectra-button" id="hack-high-jump">High Jump</button>
             </div>
 
             <div class="spectra-category hidden" data-tab-content="visuals">
@@ -1622,6 +1664,7 @@
                 <div class="spectra-category-title">Experimental</div>
                 <div class="spectra-toggle"><label>Blink</label><input type="checkbox" id="hack-blink"></div>
                 <div class="spectra-toggle"><label>Pickup Reach</label><input type="checkbox" id="hack-pickup-reach"></div>
+                <div class="spectra-toggle"><label>Anti-Spike</label><input type="checkbox" id="hack-anti-spike"></div>
                 <button class="spectra-button" id="hack-spawn-teleport">/spawn Teleport</button>
                 <button class="spectra-button" id="hack-anti-web">Anti-Web</button>
             </div>
@@ -1633,6 +1676,7 @@
                 <button class="spectra-button" id="hack-player-coords">Show Player Coords</button>
                 <button class="spectra-button" id="hack-purge-cookies">Purge Cookies & Reload</button>
                 <button class="spectra-button" id="hack-discord">Discord</button>
+                <button class="spectra-button" id="hack-unban">Attempt Unban (Reload)</button>
             </div>
         </div>
     `;
@@ -1681,26 +1725,162 @@
         });
     }
 
+    // --- NEW HACK MODULES ---
+    class Module {
+        constructor(name) { this.name = name; this.isEnabled = false; }
+        onEnable() {}
+        onDisable() {}
+        enable() { this.isEnabled = true; this.onEnable(); }
+        disable() { this.isEnabled = false; this.onDisable(); }
+        toggle() { this.isEnabled ? this.disable() : this.enable(); }
+    }
+
+    class AntiSpike extends Module {
+        constructor() { super("AntiSpike"); }
+        onEnable() {
+            let items = r.values(r.values(l.findModule("Gun:class")).find(o => typeof o == "object"));
+            let registryKey = r.keys(n.noa.registry)[12];
+            items.filter(o => o.name.includes("Spikes")).forEach(o => { n.noa.registry[registryKey][o.id] = true; });
+        }
+        onDisable() {
+            let items = r.values(r.values(l.findModule("Gun:class")).find(o => typeof o == "object"));
+            let registryKey = r.keys(n.noa.registry)[12];
+            items.filter(o => o.name.includes("Spikes")).forEach(o => { n.noa.registry[registryKey][o.id] = false; });
+        }
+    }
+
+    class Spider extends Module {
+        constructor() { super("Spider"); }
+        onRender() {
+            if (l.noa.inputs.state.jump && n.noa.touchingWall()) {
+                n.noa.setVelocity(null, 5, null);
+            }
+        }
+    }
+
+    class Killaura extends Module {
+        constructor() {
+            super("Killaura");
+            this.lastExecutionTime = 0;
+            this.delay = 100;
+        }
+        onRender() {
+            let now = Date.now();
+            if (now - this.lastExecutionTime >= this.delay) {
+                this.lastExecutionTime = now;
+                this.tryKill();
+            }
+        }
+        tryKill() {
+            let myPos = n.noa.getPosition(1);
+            n.noa.playerList.forEach(playerId => {
+                let enemyPos = n.noa.getPosition(playerId);
+                if (enemyPos && parseFloat(S.distanceBetweenSqrt(myPos, enemyPos)) <= 7) {
+                    let vector = S.normalizeVector([enemyPos[0] - myPos[0], enemyPos[1] - myPos[1], enemyPos[2] - myPos[2]]);
+                    n.noa.doAttack(vector, playerId.toString(), "BodyMesh");
+                    n.noa.getHeldItem(1)?.trySwingBlock?.();
+                    n.noa.getMoveState(1)?.setArmsAreSwinging?.();
+                }
+            });
+        }
+    }
+
+    class Jesus extends Module {
+        constructor() { super("Jesus"); }
+        onEnable() {
+            let items = r.values(r.values(l.findModule("Gun:class")).find(o => typeof o == "object"));
+            let registryKey = r.keys(n.noa.registry)[12];
+            n.noa.registry[registryKey][items.find(o => o.name == "Water").id] = true;
+            n.noa.registry[registryKey][items.find(o => o.name == "Lava").id] = true;
+        }
+        onDisable() {
+            let items = r.values(r.values(l.findModule("Gun:class")).find(o => typeof o == "object"));
+            let registryKey = r.keys(n.noa.registry)[12];
+            n.noa.registry[registryKey][items.find(o => o.name == "Water").id] = false;
+            n.noa.registry[registryKey][items.find(o => o.name == "Lava").id] = false;
+        }
+    }
+
+    class Unban extends Module {
+        constructor() { super("Unban"); }
+        onEnable() {
+            document.cookie.split(";").forEach(function(c) { document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); });
+            location.reload();
+        }
+    }
+
+    class HighJump extends Module {
+        constructor() { super("HighJump"); }
+        onEnable() {
+            n.noa.setVelocity(null, 40, null);
+        }
+    }
+
+    const newHacks = {
+        antiSpike: new AntiSpike(),
+        spider: new Spider(),
+        killaura: new Killaura(),
+        jesus: new Jesus(),
+        unban: new Unban(),
+        highJump: new HighJump()
+    };
+
     // --- HACK LOGIC & WIRING ---
     function setupHackEventListeners() {
         // Helper function to ensure injection before activation
         const preCheck = (featureName, checkboxElement) => {
             if (!injectedBool) {
                 showTemporaryNotification(`❌ Inject first to use ${featureName}!`);
-                if(checkboxElement) checkboxElement.checked = false;
+                if (checkboxElement) checkboxElement.checked = false;
                 return false;
             }
             return true;
         };
 
-        // --- Main ---
-        document.getElementById('hack-kill-aura').addEventListener('change', e => {
-            if (!preCheck("Kill Aura", e.target)) return;
-            killAuraEnabled = e.target.checked;
-            showTemporaryNotification(`Kill Aura ${killAuraEnabled ? 'enabled' : 'disabled'}`);
-        });
+        // --- Abstraction for Toggles/Buttons ---
+        const setupRenderToggle = (id, module) => {
+            document.getElementById(id)?.addEventListener('change', e => {
+                if (!preCheck(module.name, e.target)) return;
+                module.isEnabled = e.target.checked;
+                if (e.target.checked) {
+                    if (module.onEnable) module.onEnable();
+                    if (module.onRender && !modulesToRender.includes(module)) modulesToRender.push(module);
+                } else {
+                    if (module.onDisable) module.onDisable();
+                    const index = modulesToRender.indexOf(module);
+                    if (index > -1) modulesToRender.splice(index, 1);
+                }
+                showTemporaryNotification(`${module.name} ${module.isEnabled ? 'enabled' : 'disabled'}`);
+            });
+        };
 
-        document.getElementById('hack-bhop').addEventListener('change', e => {
+        const setupSimpleToggle = (id, module) => {
+            document.getElementById(id)?.addEventListener('change', e => {
+                if (!preCheck(module.name, e.target)) return;
+                module.toggle();
+                showTemporaryNotification(`${module.name} ${module.isEnabled ? 'enabled' : 'disabled'}`);
+            });
+        };
+
+        const setupButton = (id, module) => {
+            document.getElementById(id)?.addEventListener('click', () => {
+                if (!preCheck(module.name)) return;
+                module.enable();
+                showTemporaryNotification(`${module.name} triggered`);
+            });
+        };
+
+        // --- Wire up New Hacks ---
+        setupRenderToggle('hack-killaura', newHacks.killaura);
+        setupRenderToggle('hack-spider', newHacks.spider);
+        setupSimpleToggle('hack-jesus', newHacks.jesus);
+        setupSimpleToggle('hack-anti-spike', newHacks.antiSpike);
+        setupButton('hack-high-jump', newHacks.highJump);
+        setupButton('hack-unban', newHacks.unban);
+
+        // --- Wire up Old Hacks ---
+        // Note: The old "Kill Aura" is replaced by the new one.
+        document.getElementById('hack-bhop')?.addEventListener('change', e => {
             if (!preCheck("BHOP", e.target)) return;
             if (e.target.checked) {
                 bhopIntervalId = setInterval(bunnyHop, 10);
@@ -1712,30 +1892,22 @@
             }
         });
 
-        document.getElementById('hack-scaffold').addEventListener('change', e => {
+        document.getElementById('hack-scaffold')?.addEventListener('change', e => {
             if (!preCheck("Scaffold", e.target)) return;
             if (e.target.checked) {
                 scaffoldIntervalId = setInterval(() => {
-                    everEnabled.scaffoldEnabled = true;
                     const pos = Fuxny.entities.getState(1, 'position').position;
                     if (!pos || !playerEntity || playerEntity.heldItemState.heldType !== "CubeBlock") return;
-                    const exactX = pos[0];
-                    const exactZ = pos[2];
-                    const blockX = Math.floor(exactX);
-                    const blockY = Math.floor(pos[1]);
-                    const blockZ = Math.floor(exactZ);
+                    const exactX = pos[0], exactZ = pos[2];
+                    const blockX = Math.floor(exactX), blockY = Math.floor(pos[1]), blockZ = Math.floor(exactZ);
                     const checkPlace = (x, y, z) => (playerEntity.checkTargetedBlockCanBePlacedOver([x, y, z]) || r.values(Fuxny.world)[47].call(Fuxny.world, x, y, z) === 0);
                     if (checkPlace(blockX, blockY - 1, blockZ)) { wangPlace([blockX, blockY - 1, blockZ]); return; }
-                    const dx = exactX - blockX;
-                    const dz = exactZ - blockZ;
+                    const dx = exactX - blockX, dz = exactZ - blockZ;
                     const offsets = [];
-                    if (dx < 0.3) offsets.push([-1, 0]);
-                    if (dx > 0.7) offsets.push([1, 0]);
-                    if (dz < 0.3) offsets.push([0, -1]);
-                    if (dz > 0.7) offsets.push([0, 1]);
+                    if (dx < 0.3) offsets.push([-1, 0]); if (dx > 0.7) offsets.push([1, 0]);
+                    if (dz < 0.3) offsets.push([0, -1]); if (dz > 0.7) offsets.push([0, 1]);
                     for (const [ox, oz] of offsets) {
-                        const nx = blockX + ox;
-                        const nz = blockZ + oz;
+                        const nx = blockX + ox, nz = blockZ + oz;
                         if (checkPlace(nx, blockY - 1, nz)) { wangPlace([nx, blockY - 1, nz]); return; }
                     }
                 }, 50);
@@ -1747,10 +1919,9 @@
             }
         });
 
-        document.getElementById('hack-walljump').addEventListener('change', e => {
+        document.getElementById('hack-walljump')?.addEventListener('change', e => {
             if (!preCheck("Walljump", e.target)) return;
-            const client = Fuxny?.clientOptions;
-            const body = Fuxny?.physics?.bodies?.[0];
+            const client = Fuxny?.clientOptions, body = Fuxny?.physics?.bodies?.[0];
             if (!client || !body) return;
             if (e.target.checked) {
                 Object.defineProperty(client, "airJumpCount", { get: () => { if (!body.resting) return 0; const [rx, , rz] = body.resting; return (rx === 1 || rx === -1 || rz === 1 || rz === -1) ? 999 : 0; }, set(_) {}, configurable: true });
@@ -1761,7 +1932,7 @@
             }
         });
 
-        document.getElementById('hack-waterjump').addEventListener('change', e => {
+        document.getElementById('hack-waterjump')?.addEventListener('change', e => {
              if (!preCheck("Waterjump", e.target)) return;
              const c = Fuxny?.entities?.[Fuxny.impKey]?.movement?.list?.[0];
              if (!c) return;
@@ -1784,19 +1955,19 @@
              }
         });
 
-        document.getElementById('hack-noclip-move').addEventListener('change', e => {
+        document.getElementById('hack-noclip-move')?.addEventListener('change', e => {
             if (!preCheck("Noclip Move", e.target)) return;
             if (e.target.checked) { startMoving(); showTemporaryNotification("Noclip Move enabled"); }
             else { stopMoving(); showTemporaryNotification("Noclip Move disabled"); }
         });
 
-        document.getElementById('hack-kill-softly').addEventListener('change', e => {
+        document.getElementById('hack-kill-softly')?.addEventListener('change', e => {
             if (!preCheck("Kill Softly", e.target)) return;
             if (e.target.checked) { playerEntity.heldItemState.swingDuration = 1500; showTemporaryNotification("Kill Softly enabled"); }
             else { playerEntity.heldItemState.swingDuration = 200; showTemporaryNotification("Kill Softly disabled"); }
         });
 
-        document.getElementById('hack-bhop-knife').addEventListener('change', e => {
+        document.getElementById('hack-bhop-knife')?.addEventListener('change', e => {
             if (!preCheck("BHOP Knife", e.target)) return;
             if (e.target.checked) {
                 bhopKnifeEnabled = true;
@@ -1819,8 +1990,8 @@
             }
         });
 
-        document.getElementById('hack-auto-sw').addEventListener('click', () => { if (preCheck("Auto SW")) autoSW(); });
-        document.getElementById('hack-noclip-place').addEventListener('click', () => {
+        document.getElementById('hack-auto-sw')?.addEventListener('click', () => { if (preCheck("Auto SW")) autoSW(); });
+        document.getElementById('hack-noclip-place')?.addEventListener('click', () => {
             if (!preCheck("Noclip Place")) return;
             let pos = Fuxny.entities.getState(1, 'position').position;
             Fuxny.entities.setPosition(1, pos[0], pos[1], pos[2] + 1);
@@ -1829,7 +2000,7 @@
         });
 
         // --- Visuals ---
-        document.getElementById('hack-esp').addEventListener('change', e => {
+        document.getElementById('hack-esp')?.addEventListener('change', e => {
             if (!preCheck("ESP", e.target)) return;
             espEnabled = e.target.checked;
             const groupId = espEnabled ? 2 : 0;
@@ -1843,43 +2014,33 @@
             showTemporaryNotification(`ESP ${espEnabled ? 'enabled' : 'disabled'}`);
         });
 
-        document.getElementById('hack-chest-esp').addEventListener('change', e => {
+        document.getElementById('hack-chest-esp')?.addEventListener('change', e => {
             if (!preCheck("Chest ESP", e.target)) return;
             chestESPEnabled = e.target.checked;
             if (chestESPEnabled || oreESPEnabled) {
-                if (!chestOreInterval) {
-                    chestOreInterval = setInterval(scanAllChunks, 5000);
-                }
+                if (!chestOreInterval) { chestOreInterval = setInterval(scanAllChunks, 5000); }
                 scanAllChunks();
             } else {
-                if (chestOreInterval) {
-                    clearInterval(chestOreInterval);
-                    chestOreInterval = null;
-                }
+                if (chestOreInterval) { clearInterval(chestOreInterval); chestOreInterval = null; }
                 clearESPBoxes();
             }
             showTemporaryNotification(`Chest ESP ${chestESPEnabled ? 'enabled' : 'disabled'}`);
         });
 
-        document.getElementById('hack-ore-esp').addEventListener('change', e => {
+        document.getElementById('hack-ore-esp')?.addEventListener('change', e => {
             if (!preCheck("Ore ESP", e.target)) return;
             oreESPEnabled = e.target.checked;
             if (chestESPEnabled || oreESPEnabled) {
-                if (!chestOreInterval) {
-                    chestOreInterval = setInterval(scanAllChunks, 5000);
-                }
+                if (!chestOreInterval) { chestOreInterval = setInterval(scanAllChunks, 5000); }
                 scanAllChunks();
             } else {
-                if (chestOreInterval) {
-                    clearInterval(chestOreInterval);
-                    chestOreInterval = null;
-                }
+                if (chestOreInterval) { clearInterval(chestOreInterval); chestOreInterval = null; }
                 clearESPBoxes();
             }
             showTemporaryNotification(`Ore ESP ${oreESPEnabled ? 'enabled' : 'disabled'}`);
         });
 
-        document.getElementById('hack-hitboxes').addEventListener('change', e => {
+        document.getElementById('hack-hitboxes')?.addEventListener('change', e => {
             if (!preCheck("Hitboxes", e.target)) return;
             hitBoxEnabled = e.target.checked;
             for (const eId in hitboxes) {
@@ -1889,7 +2050,7 @@
             showTemporaryNotification(`Hitboxes ${hitBoxEnabled ? 'enabled' : 'disabled'}`);
         });
 
-        document.getElementById('hack-nametags').addEventListener('change', e => {
+        document.getElementById('hack-nametags')?.addEventListener('change', e => {
             if (!preCheck("Nametags", e.target)) return;
             if (e.target.checked) {
                 nameTagsEnabled = true;
@@ -1941,7 +2102,7 @@
             }
         });
 
-        document.getElementById('hack-enemy-health').addEventListener('change', e => {
+        document.getElementById('hack-enemy-health')?.addEventListener('change', e => {
              if (!preCheck("Enemy Health", e.target)) return;
              if (e.target.checked) {
                  startHealthWatcher();
@@ -1955,7 +2116,7 @@
              }
         });
 
-        document.getElementById('hack-night').addEventListener('change', e => {
+        document.getElementById('hack-night')?.addEventListener('change', e => {
             if (!preCheck("Night", e.target)) return;
             if(e.target.checked) {
                 if(!skyboxMesh) {
@@ -1974,7 +2135,7 @@
             }
         });
 
-        document.getElementById('hack-bigheads').addEventListener('change', e => {
+        document.getElementById('hack-bigheads')?.addEventListener('change', e => {
             if (!preCheck("Bigheads", e.target)) return;
             const objectData = r.values(Fuxny.rendering)[18].objectData;
             if (e.target.checked) {
@@ -2015,13 +2176,13 @@
         });
 
         // --- Experimental ---
-        document.getElementById('hack-blink').addEventListener('change', e => {
+        document.getElementById('hack-blink')?.addEventListener('change', e => {
             if (!preCheck("Blink", e.target)) return;
             toggleBlink();
             showTemporaryNotification(`Blink ${blinkState.enabled ? 'enabled' : 'disabled'}`);
         });
 
-        document.getElementById('hack-pickup-reach').addEventListener('change', e => {
+        document.getElementById('hack-pickup-reach')?.addEventListener('change', e => {
             if (!preCheck("Pickup Reach", e.target)) return;
             if (e.target.checked) {
                  if (!proto || !originalGetEntitiesInAABB) {
@@ -2048,7 +2209,7 @@
             }
         });
 
-        document.getElementById('hack-spawn-teleport').addEventListener('click', () => {
+        document.getElementById('hack-spawn-teleport')?.addEventListener('click', () => {
             if (!preCheck("Spawn Teleport")) return;
             function findElementByText(text) {
                 const all = document.querySelectorAll('div, span, button, a');
@@ -2065,14 +2226,14 @@
             } else showTemporaryNotification("Teleport button not found.");
         });
 
-        document.getElementById('hack-anti-web').addEventListener('click', () => {
+        document.getElementById('hack-anti-web')?.addEventListener('click', () => {
             if (!preCheck("Anti-Web")) return;
             Object.defineProperty(Fuxny.entities[Fuxny.impKey].moveState.list[0].speedMultiplier.multipliers, "inCobweb", { configurable: true, enumerable: true, get() { return 1; }, set(value) {} });
             showTemporaryNotification("Anti-Web applied");
         });
 
         // --- Settings ---
-        document.getElementById('hack-health-color').addEventListener('click', () => {
+        document.getElementById('hack-health-color')?.addEventListener('click', () => {
              const healthBar = document.getElementsByClassName("BottomScreenStatBar")[0];
              if (healthBar) {
                 healthBar.style.background = defaultAccent;
@@ -2080,7 +2241,7 @@
              }
         });
 
-        document.getElementById('hack-ranks').addEventListener('click', () => {
+        document.getElementById('hack-ranks')?.addEventListener('click', () => {
             if (!preCheck("Ranks")) return;
             Fuxny.entityList[1][1].ranks[0] = "developer";
             Fuxny.entityList[1][1].ranks[1] = "youtuber";
@@ -2088,7 +2249,7 @@
             showTemporaryNotification("Ranks spoofed");
         });
 
-        document.getElementById('hack-player-coords').addEventListener('click', () => {
+        document.getElementById('hack-player-coords')?.addEventListener('click', () => {
             if (!preCheck("Player Coords")) return;
             for (const key in Fuxny.bloxd.entityNames) {
                 if (key === "1") continue;
@@ -2103,7 +2264,7 @@
             showTemporaryNotification("Player coords updated in leaderboard");
         });
 
-        document.getElementById('hack-purge-cookies').addEventListener('click', () => {
+        document.getElementById('hack-purge-cookies')?.addEventListener('click', () => {
             window.onbeforeunload = null;
             const deleteCookie = (name, path = "/", domain = "") => {
                 let cookieStr = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=${path};`;
@@ -2126,11 +2287,19 @@
             setTimeout(() => location.reload(), 150);
         });
 
-        document.getElementById('hack-discord').addEventListener('click', () => {
+        document.getElementById('hack-discord')?.addEventListener('click', () => {
             window.open("https://discord.gg/G6ksFfQdaW", "_blank");
         });
     }
 
     setupHackEventListeners();
 
+    const modulesToRender = [];
+    function renderLoop() {
+        for (const module of modulesToRender) {
+            module.onRender();
+        }
+        requestAnimationFrame(renderLoop);
+    }
+    renderLoop();
 })();
