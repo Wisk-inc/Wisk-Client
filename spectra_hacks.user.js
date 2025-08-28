@@ -1575,13 +1575,13 @@ function triggerXPDuper() {
         setInterval(makeHitboxes, 1000);
     }
 
-    waitForElement('#noa-container canvas', (el) => {
-        console.log('Game canvas appeared:', el);
+    window.addEventListener('load', () => {
+        console.log('Window loaded, attempting injection.');
         performInjection();
         if (!injectedBool) {
-            showTemporaryNotification("injection failed");
+            showTemporaryNotification("Injection failed. Please reload.");
         } else {
-            showTemporaryNotification("injection successful");
+            showTemporaryNotification("Injection successful!");
         }
     });
 
