@@ -1735,6 +1735,14 @@ function triggerXPDuper() {
 
         /* Main container */
         #spectra-ui {
+            --primary-color: #D30000;
+            --secondary-color: #3e0000;
+            --text-color: #ffffff;
+            --bg-color: rgba(15, 15, 20, 0.92);
+            --border-color: rgba(255, 255, 255, 0.1);
+            --hover-bg-color: rgba(255, 255, 255, 0.15);
+            --font-family: "Segoe UI", sans-serif;
+
             position: fixed;
             top: 50%;
             left: 50%;
@@ -1742,15 +1750,19 @@ function triggerXPDuper() {
             width: 520px;
             max-width: 95%;
             height: 320px;
-            background: rgba(15, 15, 20, 0.92);
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
             border-radius: 14px;
-            border: 1px solid rgba(255,255,255,0.1);
+            border: 1px solid var(--border-color);
             display: flex;
             overflow: hidden;
-            color: white;
-            font-family: "Segoe UI", sans-serif;
-            box-shadow: 0 0 25px rgba(255, 255, 255, 0.2); /* White Glow */
+            color: var(--text-color);
+            font-family: var(--font-family);
+            box-shadow: 0 0 25px var(--primary-color);
             z-index: 999999;
+            transition: background 0.5s, box-shadow 0.5s, color 0.5s, font-family 0.5s;
+        }
+        #spectra-ui * {
+             font-family: var(--font-family);
         }
 
         /* UI Controls */
@@ -1759,13 +1771,14 @@ function triggerXPDuper() {
             top: 8px;
             right: 12px;
             font-size: 20px;
-            color: #aaa;
+            color: var(--text-color);
+            opacity: 0.7;
             cursor: pointer;
-            transition: color 0.2s;
+            transition: opacity 0.2s;
             z-index: 10;
         }
         #spectra-exit-btn:hover {
-            color: #fff;
+            opacity: 1;
         }
         #spectra-reopen-btn {
             position: fixed;
@@ -1773,14 +1786,14 @@ function triggerXPDuper() {
             left: 20px;
             width: 40px;
             height: 40px;
-            background: rgba(30, 30, 35, 0.9);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
             border-radius: 8px;
             display: none; /* Hidden by default */
             justify-content: center;
             align-items: center;
             font-size: 24px;
-            color: white;
+            color: var(--text-color);
             cursor: pointer;
             z-index: 1000000;
             box-shadow: 0 0 15px rgba(0,0,0,0.5);
@@ -1789,8 +1802,8 @@ function triggerXPDuper() {
         /* Sidebar */
         #spectra-sidebar {
             width: 150px;
-            background: linear-gradient(180deg, #111, #191919);
-            border-right: 1px solid rgba(255,255,255,0.08);
+            background: var(--bg-color);
+            border-right: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
             align-items: stretch;
@@ -1804,12 +1817,11 @@ function triggerXPDuper() {
             align-items: center;
             padding: 8px 0 16px;
             margin-bottom: 12px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+            border-bottom: 1px solid var(--border-color);
         }
         #spectra-sidebar img {
             width: 65px;
             border-radius: 10px;
-            /* Removed the box-shadow for the logo */
         }
 
         /* Tabs with icons */
@@ -1822,8 +1834,9 @@ function triggerXPDuper() {
             display: flex;
             align-items: center;
             gap: 8px;
-            color: #ddd;
-            transition: background 0.2s, color 0.2s;
+            color: var(--text-color);
+            opacity: 0.8;
+            transition: background 0.2s, color 0.2s, opacity 0.2s;
         }
         .spectra-tab svg {
             flex-shrink: 0;
@@ -1832,18 +1845,20 @@ function triggerXPDuper() {
             flex: 1;
         }
         .spectra-tab:hover {
-            background: rgba(255,255,255,0.08);
-            color: #fff;
+            background: var(--hover-bg-color);
+            opacity: 1;
         }
         .spectra-tab.active {
-            background: linear-gradient(90deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05)); /* White Active Tab */
-            color: #fff;
+            background: linear-gradient(90deg, var(--primary-color), transparent);
+            color: var(--text-color);
             font-weight: 600;
+            opacity: 1;
         }
 
         /* Content area */
         #spectra-content {
             flex: 1;
+            background: var(--bg-color);
             padding: 16px;
             overflow-y: auto;
         }
@@ -1851,12 +1866,13 @@ function triggerXPDuper() {
             font-size: 15px;
             font-weight: bold;
             margin-bottom: 10px;
-            border-bottom: 1px solid rgba(255,255,255,0.12);
+            border-bottom: 1px solid var(--border-color);
             padding-bottom: 4px;
+            color: var(--primary-color);
         }
 
-        /* Toggles */
-        .spectra-toggle {
+        /* Generic UI elements */
+        .spectra-toggle, .spectra-button, .spectra-setting {
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -1866,29 +1882,22 @@ function triggerXPDuper() {
             border-radius: 8px;
             transition: background 0.2s;
         }
+        .spectra-toggle:hover, .spectra-button:hover, .spectra-setting:hover {
+            background: var(--hover-bg-color);
+        }
         .spectra-button {
-            background: rgba(255,255,255,0.04);
-            padding: 8px 12px;
-            margin: 5px 0;
-            border-radius: 8px;
-            transition: background 0.2s;
-            color: white;
+            color: var(--text-color);
             font-size: 14px;
-            border: 1px solid rgba(255,255,255,0.1);
+            border: 1px solid var(--border-color);
             cursor: pointer;
             text-align: center;
             width: 100%;
         }
-        .spectra-button:hover {
-            background: rgba(255,255,255,0.08);
-        }
-        .spectra-toggle:hover {
-            background: rgba(255,255,255,0.08);
-        }
-        .spectra-toggle label {
+
+        .spectra-toggle label, .spectra-setting label {
             font-size: 14px;
         }
-        .spectra-toggle input {
+        .spectra-toggle input[type="checkbox"] {
             appearance: none;
             width: 34px;
             height: 18px;
@@ -1898,10 +1907,10 @@ function triggerXPDuper() {
             cursor: pointer;
             transition: 0.3s;
         }
-        .spectra-toggle input:checked {
-            background: #4CAF50; /* Green Toggle */
+        .spectra-toggle input[type="checkbox"]:checked {
+            background: var(--primary-color);
         }
-        .spectra-toggle input::before {
+        .spectra-toggle input[type="checkbox"]::before {
             content: "";
             position: absolute;
             top: 2px; left: 2px;
@@ -1910,7 +1919,7 @@ function triggerXPDuper() {
             border-radius: 50%;
             transition: 0.3s;
         }
-        .spectra-toggle input:checked::before {
+        .spectra-toggle input[type="checkbox"]:checked::before {
             left: 18px;
             background: #fff;
         }
@@ -1978,18 +1987,85 @@ function triggerXPDuper() {
                 <div class="spectra-category-title">Settings</div>
                 <div class="spectra-toggle"><label>Anti-Ban (Safer)</label><input type="checkbox" id="hack-anti-ban"></div>
                 <div class="spectra-toggle"><label>Inventory Cleaner</label><input type="checkbox" id="hack-inv-cleaner"></div>
-                <button class="spectra-button" id="hack-health-color">Set Health Color</button>
+                <div class="spectra-category-title">Theme Settings</div>
+                <div class="spectra-setting">
+                    <label>Primary Color</label>
+                    <input type="color" id="theme-primary-color" value="#D30000">
+                </div>
+                <div class="spectra-setting">
+                    <label>Secondary Color</label>
+                    <input type="color" id="theme-secondary-color" value="#3e0000">
+                </div>
+                <div class="spectra-setting">
+                    <label>Font</label>
+                    <select id="theme-font-select">
+                        <option value='"Segoe UI", sans-serif'>Segoe UI</option>
+                        <option value="Arial, sans-serif">Arial</option>
+                        <option value="Verdana, sans-serif">Verdana</option>
+                        <option value="Georgia, serif">Georgia</option>
+                        <option value="'Courier New', monospace">Courier New</option>
+                    </select>
+                </div>
+                <button class="spectra-button" id="theme-reset">Reset Theme</button>
                 <button class="spectra-button" id="hack-ranks">Spoof Ranks</button>
                 <button class="spectra-button" id="hack-player-coords">Show Player Coords</button>
                 <button class="spectra-button" id="hack-purge-cookies">Purge Cookies & Reload</button>
                 <button class="spectra-button" id="hack-discord">Discord</button>
                 <button class="spectra-button" id="hack-unban">Attempt Unban (Reload)</button>
+                <button class="spectra-button" id="hack-manual-inject">Manual Inject</button>
             </div>
         </div>
     `;
     document.body.appendChild(ui);
 
-    // --- Create and append the floating reopen button ---
+    // --- THEME CUSTOMIZATION ---
+    const uiElement = document.getElementById('spectra-ui');
+    const primaryColorPicker = document.getElementById('theme-primary-color');
+    const secondaryColorPicker = document.getElementById('theme-secondary-color');
+    const fontSelect = document.getElementById('theme-font-select');
+    const themeResetBtn = document.getElementById('theme-reset');
+
+    const defaultTheme = {
+        primary: '#D30000',
+        secondary: '#3e0000',
+        font: '"Segoe UI", sans-serif'
+    };
+
+    function applyTheme(primary, secondary, font) {
+        uiElement.style.setProperty('--primary-color', primary);
+        uiElement.style.setProperty('--secondary-color', secondary);
+        uiElement.style.setProperty('--font-family', font);
+    }
+
+    function saveTheme(primary, secondary, font) {
+        localStorage.setItem('spectraTheme', JSON.stringify({ primary, secondary, font }));
+    }
+
+    function loadTheme() {
+        const savedTheme = JSON.parse(localStorage.getItem('spectraTheme'));
+        const theme = { ...defaultTheme, ...savedTheme };
+
+        applyTheme(theme.primary, theme.secondary, theme.font);
+
+        primaryColorPicker.value = theme.primary;
+        secondaryColorPicker.value = theme.secondary;
+        fontSelect.value = theme.font;
+    }
+
+    primaryColorPicker.addEventListener('input', () => applyTheme(primaryColorPicker.value, secondaryColorPicker.value, fontSelect.value));
+    secondaryColorPicker.addEventListener('input', () => applyTheme(primaryColorPicker.value, secondaryColorPicker.value, fontSelect.value));
+    fontSelect.addEventListener('change', () => applyTheme(primaryColorPicker.value, secondaryColorPicker.value, fontSelect.value));
+
+    primaryColorPicker.addEventListener('change', () => saveTheme(primaryColorPicker.value, secondaryColorPicker.value, fontSelect.value));
+    secondaryColorPicker.addEventListener('change', () => saveTheme(primaryColorPicker.value, secondaryColorPicker.value, fontSelect.value));
+    fontSelect.addEventListener('change', () => saveTheme(primaryColorPicker.value, secondaryColorPicker.value, fontSelect.value));
+
+    themeResetBtn.addEventListener('click', () => {
+        localStorage.removeItem('spectraTheme');
+        loadTheme();
+        showTemporaryNotification("Theme reset to default.");
+    });
+
     const reopenBtn = document.createElement("div");
     reopenBtn.id = "spectra-reopen-btn";
     reopenBtn.innerHTML = '☰';
@@ -2629,6 +2705,11 @@ function triggerXPDuper() {
         document.getElementById('hack-discord')?.addEventListener('click', () => {
             window.open("https://discord.gg/G6ksFfQdaW", "_blank");
         });
+
+        document.getElementById('hack-manual-inject')?.addEventListener('click', () => {
+            showTemporaryNotification("Attempting manual injection...");
+            performInjection();
+        });
     }
 
     setupHackEventListeners();
@@ -2640,5 +2721,7 @@ function triggerXPDuper() {
         }
         requestAnimationFrame(renderLoop);
     }
+
+    loadTheme();
     renderLoop();
 })();
