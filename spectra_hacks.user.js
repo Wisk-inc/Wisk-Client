@@ -86,6 +86,8 @@
     ]; // Potential detection: If the player has leg armour there is no way leftLegMesh could have been hit.
     let killAuraEnabled = false
     let killAuraIntervalId = null
+    let killshotEnabled = false
+    let killshotInterval = null
     let lastClosestId = null
     let newBox = null;
     let newBoxId = null;
@@ -826,6 +828,46 @@
         if (!everEnabled.autoSWUsed) {
             everEnabled.autoSWUsed = true
         };
+    }
+
+    function distBetween(a, b) {
+        return Math.sqrt(
+            (b[0]-a[0])**2 +
+            (b[1]-a[1])**2 +
+            (b[2]-a[2])**2
+        );
+    }
+    function normVector(v) {
+        const len = Math.sqrt(v[0]**2 + v[1]**2 + v[2]**2);
+        return len > 0 ? [v[0]/len, v[1]/len, v[2]/len] : [0,0,0];
+    }
+    function shootAtEnemies() {
+        if (!playerEntity || !Fuxny.bloxd || !Fuxny.entities) return;
+        const myPos = Fuxny.entities.getState(1, "position").position.slice();
+        myPos[1] += 1.6;
+        if (playerEntity.heldItemState._gunItem.heldItemState.heldType !== "Gun" ||playerEntity.heldItemState._gunItem.reloading) return;
+        for (const key in Fuxny.bloxd.entityNames) {
+            if (key === "1") continue;
+            const entityData = Fuxny.entityList?.[1]?.[key];
+            if (!entityData || !entityData._isAlive || !entityData.canAttack) continue;
+        if (Fuxny.entityList[1][key]?.lobbyLeaderboardValues?.team) {if (Fuxny.entityList[1][key].lobbyLeaderboardValues.team === Fuxny.entityList[1][1].lobbyLeaderboardValues.team) continue;}
+        if (Fuxny.entityList[1][key]?.lobbyLeaderboardValues?.teamDisplay) {if (Fuxny.entityList[1][key].lobbyLeaderboardValues.teamDisplay === Fuxny.entityList[1][1].lobbyLeaderboardValues.teamDisplay) continue;}
+            const enemyPos = Fuxny.entities.getState(key, "position")?.position;
+            if (!enemyPos) continue;
+            const targetPos = [enemyPos[0], enemyPos[1]+1.6, enemyPos[2]];
+            const vector = normVector([
+                targetPos[0]-myPos[0],
+                targetPos[1]-myPos[1],
+                targetPos[2]-myPos[2]
+            ]);
+            const gun = playerEntity.heldItemState._gunItem;
+            const losCheck = gun.fireBullet(new Float32Array(vector), 0);
+            if (losCheck.meshNodeHit !== "HeadMesh") continue;
+            const originalFunc = gun.inaccuracyCalculator.getDirectionWithInaccuracy;
+            gun.inaccuracyCalculator.getDirectionWithInaccuracy = () => new Float32Array(vector);
+            gun.fireBulletLocal();
+            gun.inaccuracyCalculator.getDirectionWithInaccuracy = originalFunc;
+        }
     }
 
 function triggerXPDuper() {
@@ -1586,6 +1628,7 @@ function triggerXPDuper() {
             <div class="spectra-category" data-tab-content="main">
                 <div class="spectra-category-title">Main</div>
                 <div class="spectra-toggle"><label>Killaura</label><input type="checkbox" id="hack-killaura"></div>
+                <div class="spectra-toggle"><label>Killshot</label><input type="checkbox" id="hack-killshot"></div>
                 <div class="spectra-toggle"><label>Spider</label><input type="checkbox" id="hack-spider"></div>
                 <div class="spectra-toggle"><label>Jesus</label><input type="checkbox" id="hack-jesus"></div>
                 <div class="spectra-toggle"><label>BHOP</label><input type="checkbox" id="hack-bhop"></div>
@@ -1826,6 +1869,18 @@ function triggerXPDuper() {
         };
 
         // --- Wire up New Hacks ---
+        document.getElementById('hack-killshot')?.addEventListener('change', e => {
+            if (!preCheck("Killshot", e.target)) return;
+            killshotEnabled = e.target.checked;
+            if (killshotEnabled) {
+                killshotInterval = setInterval(shootAtEnemies, 50);
+                showTemporaryNotification("Killshot ENABLED");
+            } else {
+                if (killshotInterval) clearInterval(killshotInterval);
+                killshotInterval = null;
+                showTemporaryNotification("Killshot DISABLED");
+            }
+        });
         setupRenderToggle('hack-killaura', newHacks.killaura);
         setupRenderToggle('hack-spider', newHacks.spider);
         setupSimpleToggle('hack-jesus', newHacks.jesus);
