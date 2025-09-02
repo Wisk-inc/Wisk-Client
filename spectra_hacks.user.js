@@ -116,6 +116,8 @@
     let bhopEnabled = false;
     let bhopIntervalId = null;
 
+let scaffoldEnabled = false;
+
     let enemyHealthGuiEnabled = false;
     let healthWatcherInterval = null;
     let lastPercent = null;
@@ -770,6 +772,204 @@
             moveState.jumping = false;
         }, 20);
     }
+
+function toggleScaffold() {
+    if (!preCheck("Scaffold")) return;
+
+    scaffoldEnabled = !scaffoldEnabled;
+
+    if (scaffoldEnabled) {
+        scaffoldIntervalId = setInterval(() => {
+            const pos = Fuxny.entities.getState(1, 'position').position;
+			if (!pos || !playerEntity || playerEntity.heldItemState.heldType !== "CubeBlock") return;
+
+            const exactX = pos[0];
+            const exactZ = pos[2];
+
+            const blockX = Math.floor(exactX);
+            const blockY = Math.floor(pos[1]);
+            const blockZ = Math.floor(exactZ);
+
+            const checkPlace = (x, y, z) => {
+                return (
+                    playerEntity.checkTargetedBlockCanBePlacedOver([x, y, z]) ||
+                    r.values(Fuxny.world)[47].call(Fuxny.world, x, y, z) === 0
+                );
+            };
+
+            if (checkPlace(blockX, blockY - 1, blockZ)) {
+                wangPlace([blockX, blockY - 1, blockZ]);
+                return;
+            }
+
+            const dx = exactX - blockX;
+            const dz = exactZ - blockZ;
+
+            const offsets = [];
+
+            if (dx < 0.3) offsets.push([-1, 0]);
+            if (dx > 0.7) offsets.push([1, 0]);
+            if (dz < 0.3) offsets.push([0, -1]);
+            if (dz > 0.7) offsets.push([0, 1]);
+
+            for (const [ox, oz] of offsets) {
+                const nx = blockX + ox;
+                const nz = blockZ + oz;
+                if (checkPlace(nx, blockY - 1, nz)) {
+                    wangPlace([nx, blockY - 1, nz]);
+                    return;
+                }
+            }
+        }, 50);
+        showTemporaryNotification("Scaffold ENABLED");
+    } else {
+        if (scaffoldIntervalId) clearInterval(scaffoldIntervalId);
+        scaffoldIntervalId = null;
+        showTemporaryNotification("Scaffold DISABLED");
+    }
+}
+
+let aimbotInterval = null;
+
+function toggleESP() {
+    if (!preCheck("ESP")) return;
+
+    espEnabled = !espEnabled;
+    const groupId = espEnabled ? 2 : 0;
+
+    if (Fuxny.rendering && r.values(Fuxny.rendering)[18] && Array.isArray(r.values(Fuxny.rendering)[18].thinMeshes)) {
+        for (const thinMesh of r.values(Fuxny.rendering)[18].thinMeshes) {
+            if (thinMesh?.mesh && typeof thinMesh.mesh.renderingGroupId === "number") {
+                thinMesh.mesh.renderingGroupId = groupId;
+            }
+        }
+    }
+
+    showTemporaryNotification(`ESP & Aim ${espEnabled ? 'ENABLED' : 'DISABLED'}`);
+
+    if (espEnabled) {
+        if (!aimbotInterval) {
+            aimbotInterval = setInterval(() => {
+                if (!lastClosestId) return;
+
+                const screenWidth = window.innerWidth;
+                const screenHeight = window.innerHeight;
+                const targetX = screenWidth / 2;
+                const targetY = screenHeight / 2;
+
+                const targetElement = document.elementFromPoint(targetX, targetY) || document.body;
+                if (!targetElement) return;
+
+                const mkTouch = (id, x, y) => new Touch({
+                    identifier: id,
+                    target: targetElement,
+                    clientX: x,
+                    clientY: y,
+                    radiusX: 10,
+                    radiusY: 10,
+                    rotationAngle: 0,
+                    force: 1,
+                });
+
+                const start = mkTouch(Date.now(), targetX, targetY);
+                const end = mkTouch(Date.now() + 1, targetX, targetY);
+
+                targetElement.dispatchEvent(new TouchEvent("touchstart", {touches:[start],targetTouches:[start],changedTouches:[start],bubbles:true}));
+                targetElement.dispatchEvent(new TouchEvent("touchend", {touches:[],targetTouches:[],changedTouches:[end],bubbles:true}));
+
+            }, 50);
+        }
+    } else {
+        if (aimbotInterval) {
+            clearInterval(aimbotInterval);
+            aimbotInterval = null;
+        }
+    }
+}
+
+function toggleBhopKnife() {
+    if (!preCheck("BHOP Knife")) return;
+
+    bhopKnifeEnabled = !bhopKnifeEnabled;
+
+    if (bhopKnifeEnabled) {
+        spaceVid = document.createElement('video');
+        spaceVid.src = 'https://files.catbox.moe/6tm4e7.webm';
+        spaceVid.preload = 'auto';
+        spaceVid.loop = true;
+        spaceVid.muted = false;
+        spaceVid.volume = 0;
+        spaceVid.playbackRate = 1;
+        spaceVid.playsInline = true;
+        Object.assign(spaceVid.style, {
+            position: 'fixed', top: '50%', left: '50%', width: '100vw', height: '100vh',
+            objectFit: 'cover', transform: 'translate(-50%, -50%) scaleX(1.4)',
+            zIndex: 21, pointerEvents: 'none', opacity: '0', transition: 'opacity 2.5s ease',
+        });
+        document.body.appendChild(spaceVid);
+        window.addEventListener('keydown', onKeyDown);
+        window.addEventListener('keyup', onKeyUp);
+        showTemporaryNotification("BHOP Knife ENABLED");
+    } else {
+        window.removeEventListener('keydown', onKeyDown);
+        window.removeEventListener('keyup', onKeyUp);
+        if (spaceVid) {
+            spaceVid.pause();
+            if (spaceVid.parentNode) spaceVid.parentNode.removeChild(spaceVid);
+            spaceVid = null;
+        }
+        spaceHeld = false;
+        if (fadeVolumeInterval) clearInterval(fadeVolumeInterval);
+        showTemporaryNotification("BHOP Knife DISABLED");
+    }
+}
+
+function toggleWallJump() {
+    if (!preCheck("Walljump")) return;
+
+    const client = Fuxny?.clientOptions;
+    const body = Fuxny?.physics?.bodies?.[0];
+    if (!client || !body) return;
+
+    wallJumpRunning = !wallJumpRunning;
+
+    if (wallJumpRunning) {
+        Object.defineProperty(client, "airJumpCount", {
+            get() {
+                if (!body.resting) return 0;
+                const [rx, , rz] = body.resting;
+                return (rx === 1 || rx === -1 || rz === 1 || rz === -1) ? 999 : 0;
+            },
+            set(_) {},
+            configurable: true
+        });
+        showTemporaryNotification("Walljump ENABLED");
+    } else {
+        Object.defineProperty(client, "airJumpCount", {
+            value: 0,
+            writable: true,
+            configurable: true
+        });
+        showTemporaryNotification("Walljump DISABLED");
+    }
+}
+
+function toggleBHOP() {
+    if (!preCheck("BHOP")) return;
+    bhopEnabled = !bhopEnabled;
+    if (bhopEnabled) {
+        if (!moveState || !physState) {
+            bhopEnabled = false;
+            return;
+        }
+        bhopIntervalId = setInterval(bunnyHop, 10);
+        showTemporaryNotification("BHOP ENABLED");
+    } else {
+        clearInterval(bhopIntervalId);
+        bhopIntervalId = null;
+        showTemporaryNotification("BHOP DISABLED");
+    }
+}
 
     function waitForElement(selector, callback) {
         if (alreadyConnected) {
@@ -1735,8 +1935,8 @@ function triggerXPDuper() {
 
         /* Main container */
         #spectra-ui {
-            --primary-color: #D30000;
-            --secondary-color: #3e0000;
+            --primary-color: #FFFFFF;
+            --secondary-color: #000000;
             --text-color: #ffffff;
             --bg-color: rgba(15, 15, 20, 0.92);
             --border-color: rgba(255, 255, 255, 0.1);
@@ -2006,6 +2206,10 @@ function triggerXPDuper() {
                         <option value="'Courier New', monospace">Courier New</option>
                     </select>
                 </div>
+                <div class="spectra-toggle">
+                    <label>Enable Gradient</label>
+                    <input type="checkbox" id="theme-gradient-toggle" checked>
+                </div>
                 <button class="spectra-button" id="theme-reset">Reset Theme</button>
                 <button class="spectra-button" id="hack-ranks">Spoof Ranks</button>
                 <button class="spectra-button" id="hack-player-coords">Show Player Coords</button>
@@ -2023,42 +2227,65 @@ function triggerXPDuper() {
     const primaryColorPicker = document.getElementById('theme-primary-color');
     const secondaryColorPicker = document.getElementById('theme-secondary-color');
     const fontSelect = document.getElementById('theme-font-select');
+    const gradientToggle = document.getElementById('theme-gradient-toggle');
     const themeResetBtn = document.getElementById('theme-reset');
 
     const defaultTheme = {
-        primary: '#D30000',
-        secondary: '#3e0000',
-        font: '"Segoe UI", sans-serif'
+        primary: '#FFFFFF',
+        secondary: '#000000',
+        font: '"Segoe UI", sans-serif',
+        gradientEnabled: true
     };
 
-    function applyTheme(primary, secondary, font) {
-        uiElement.style.setProperty('--primary-color', primary);
-        uiElement.style.setProperty('--secondary-color', secondary);
-        uiElement.style.setProperty('--font-family', font);
+    function applyTheme(theme) {
+        uiElement.style.setProperty('--primary-color', theme.primary);
+        uiElement.style.setProperty('--secondary-color', theme.secondary);
+        uiElement.style.setProperty('--font-family', theme.font);
+
+        if (theme.gradientEnabled) {
+            uiElement.style.background = `linear-gradient(135deg, ${theme.primary}, ${theme.secondary})`;
+        } else {
+            uiElement.style.background = theme.primary;
+        }
     }
 
-    function saveTheme(primary, secondary, font) {
-        localStorage.setItem('spectraTheme', JSON.stringify({ primary, secondary, font }));
+    function saveTheme(theme) {
+        localStorage.setItem('spectraTheme', JSON.stringify(theme));
     }
 
     function loadTheme() {
-        const savedTheme = JSON.parse(localStorage.getItem('spectraTheme'));
+        let savedTheme = {};
+        try {
+            savedTheme = JSON.parse(localStorage.getItem('spectraTheme')) || {};
+        } catch (e) {
+            console.warn("Could not parse saved theme.");
+        }
+
         const theme = { ...defaultTheme, ...savedTheme };
 
-        applyTheme(theme.primary, theme.secondary, theme.font);
+        applyTheme(theme);
 
         primaryColorPicker.value = theme.primary;
         secondaryColorPicker.value = theme.secondary;
         fontSelect.value = theme.font;
+        gradientToggle.checked = theme.gradientEnabled;
     }
 
-    primaryColorPicker.addEventListener('input', () => applyTheme(primaryColorPicker.value, secondaryColorPicker.value, fontSelect.value));
-    secondaryColorPicker.addEventListener('input', () => applyTheme(primaryColorPicker.value, secondaryColorPicker.value, fontSelect.value));
-    fontSelect.addEventListener('change', () => applyTheme(primaryColorPicker.value, secondaryColorPicker.value, fontSelect.value));
+    function handleThemeChange() {
+        const theme = {
+            primary: primaryColorPicker.value,
+            secondary: secondaryColorPicker.value,
+            font: fontSelect.value,
+            gradientEnabled: gradientToggle.checked
+        };
+        applyTheme(theme);
+        saveTheme(theme);
+    }
 
-    primaryColorPicker.addEventListener('change', () => saveTheme(primaryColorPicker.value, secondaryColorPicker.value, fontSelect.value));
-    secondaryColorPicker.addEventListener('change', () => saveTheme(primaryColorPicker.value, secondaryColorPicker.value, fontSelect.value));
-    fontSelect.addEventListener('change', () => saveTheme(primaryColorPicker.value, secondaryColorPicker.value, fontSelect.value));
+    primaryColorPicker.addEventListener('input', handleThemeChange);
+    secondaryColorPicker.addEventListener('input', handleThemeChange);
+    fontSelect.addEventListener('change', handleThemeChange);
+    gradientToggle.addEventListener('change', handleThemeChange);
 
     themeResetBtn.addEventListener('click', () => {
         localStorage.removeItem('spectraTheme');
@@ -2276,57 +2503,11 @@ function triggerXPDuper() {
 
         // --- Wire up Old Hacks ---
         // Note: The old "Kill Aura" is replaced by the new one.
-        document.getElementById('hack-bhop')?.addEventListener('change', e => {
-            if (!preCheck("BHOP", e.target)) return;
-            if (e.target.checked) {
-                bhopIntervalId = setInterval(bunnyHop, 10);
-                showTemporaryNotification("BHOP enabled");
-            } else {
-                clearInterval(bhopIntervalId);
-                bhopIntervalId = null;
-                showTemporaryNotification("BHOP disabled");
-            }
-        });
+        document.getElementById('hack-bhop')?.addEventListener('change', toggleBHOP);
 
-        document.getElementById('hack-scaffold')?.addEventListener('change', e => {
-            if (!preCheck("Scaffold", e.target)) return;
-            if (e.target.checked) {
-                scaffoldIntervalId = setInterval(() => {
-                    const pos = Fuxny.entities.getState(1, 'position').position;
-                    if (!pos || !playerEntity || playerEntity.heldItemState.heldType !== "CubeBlock") return;
-                    const exactX = pos[0], exactZ = pos[2];
-                    const blockX = Math.floor(exactX), blockY = Math.floor(pos[1]), blockZ = Math.floor(exactZ);
-                    const checkPlace = (x, y, z) => (playerEntity.checkTargetedBlockCanBePlacedOver([x, y, z]) || r.values(Fuxny.world)[47].call(Fuxny.world, x, y, z) === 0);
-                    if (checkPlace(blockX, blockY - 1, blockZ)) { wangPlace([blockX, blockY - 1, blockZ]); return; }
-                    const dx = exactX - blockX, dz = exactZ - blockZ;
-                    const offsets = [];
-                    if (dx < 0.3) offsets.push([-1, 0]); if (dx > 0.7) offsets.push([1, 0]);
-                    if (dz < 0.3) offsets.push([0, -1]); if (dz > 0.7) offsets.push([0, 1]);
-                    for (const [ox, oz] of offsets) {
-                        const nx = blockX + ox, nz = blockZ + oz;
-                        if (checkPlace(nx, blockY - 1, nz)) { wangPlace([nx, blockY - 1, nz]); return; }
-                    }
-                }, 50);
-                showTemporaryNotification("Scaffold enabled");
-            } else {
-                clearInterval(scaffoldIntervalId);
-                scaffoldIntervalId = null;
-                showTemporaryNotification("Scaffold disabled");
-            }
-        });
+        document.getElementById('hack-scaffold')?.addEventListener('change', toggleScaffold);
 
-        document.getElementById('hack-walljump')?.addEventListener('change', e => {
-            if (!preCheck("Walljump", e.target)) return;
-            const client = Fuxny?.clientOptions, body = Fuxny?.physics?.bodies?.[0];
-            if (!client || !body) return;
-            if (e.target.checked) {
-                Object.defineProperty(client, "airJumpCount", { get: () => { if (!body.resting) return 0; const [rx, , rz] = body.resting; return (rx === 1 || rx === -1 || rz === 1 || rz === -1) ? 999 : 0; }, set(_) {}, configurable: true });
-                showTemporaryNotification("Walljump enabled");
-            } else {
-                Object.defineProperty(client, "airJumpCount", { value: 0, writable: true, configurable: true });
-                showTemporaryNotification("Walljump disabled");
-            }
-        });
+        document.getElementById('hack-walljump')?.addEventListener('change', toggleWallJump);
 
         document.getElementById('hack-waterjump')?.addEventListener('change', e => {
              if (!preCheck("Waterjump", e.target)) return;
@@ -2363,28 +2544,7 @@ function triggerXPDuper() {
             else { playerEntity.heldItemState.swingDuration = 200; showTemporaryNotification("Kill Softly disabled"); }
         });
 
-        document.getElementById('hack-bhop-knife')?.addEventListener('change', e => {
-            if (!preCheck("BHOP Knife", e.target)) return;
-            if (e.target.checked) {
-                bhopKnifeEnabled = true;
-                spaceVid = document.createElement('video');
-                spaceVid.src = 'https://files.catbox.moe/6tm4e7.webm';
-                spaceVid.preload = 'auto'; spaceVid.loop = true; spaceVid.muted = false; spaceVid.volume = 0; spaceVid.playbackRate = 1; spaceVid.playsInline = true;
-                Object.assign(spaceVid.style, { position: 'fixed', top: '50%', left: '50%', width: '100vw', height: '100vh', objectFit: 'cover', transform: 'translate(-50%, -50%) scaleX(1.4)', zIndex: 21, pointerEvents: 'none', opacity: '0', transition: 'opacity 2.5s ease', });
-                document.body.appendChild(spaceVid);
-                window.addEventListener('keydown', onKeyDown);
-                window.addEventListener('keyup', onKeyUp);
-                showTemporaryNotification("BHOP Knife enabled");
-            } else {
-                bhopKnifeEnabled = false;
-                window.removeEventListener('keydown', onKeyDown);
-                window.removeEventListener('keyup', onKeyUp);
-                if (spaceVid) { spaceVid.pause(); if (spaceVid.parentNode) spaceVid.parentNode.removeChild(spaceVid); spaceVid = null; }
-                spaceHeld = false;
-                if (fadeVolumeInterval) clearInterval(fadeVolumeInterval);
-                showTemporaryNotification("BHOP Knife disabled");
-            }
-        });
+        document.getElementById('hack-bhop-knife')?.addEventListener('change', toggleBhopKnife);
 
         document.getElementById('hack-auto-sw')?.addEventListener('click', () => { if (preCheck("Auto SW")) autoSW(); });
         document.getElementById('hack-xp-duper')?.addEventListener('click', () => { triggerXPDuper(); });
@@ -2397,19 +2557,7 @@ function triggerXPDuper() {
         });
 
         // --- Visuals ---
-        document.getElementById('hack-esp')?.addEventListener('change', e => {
-            if (!preCheck("ESP", e.target)) return;
-            espEnabled = e.target.checked;
-            const groupId = espEnabled ? 2 : 0;
-            if (Array.isArray(r.values(Fuxny.rendering)[18].thinMeshes)) {
-                for (const thinMesh of r.values(Fuxny.rendering)[18].thinMeshes) {
-                    if (thinMesh?.mesh && typeof thinMesh.mesh.renderingGroupId === "number") {
-                        thinMesh.mesh.renderingGroupId = groupId;
-                    }
-                }
-            }
-            showTemporaryNotification(`ESP ${espEnabled ? 'enabled' : 'disabled'}`);
-        });
+        document.getElementById('hack-esp')?.addEventListener('change', toggleESP);
 
         document.getElementById('hack-chest-esp')?.addEventListener('change', e => {
             if (!preCheck("Chest ESP", e.target)) return;
