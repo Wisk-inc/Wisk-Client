@@ -88,6 +88,8 @@
     let killAuraIntervalId = null
     let killshotEnabled = false
     let killshotInterval = null
+    let inventoryCleanerEnabled = false
+    let inventoryCleanerInterval = null
     let lastClosestId = null
     let newBox = null;
     let newBoxId = null;
@@ -869,6 +871,313 @@
             gun.inaccuracyCalculator.getDirectionWithInaccuracy = originalFunc;
         }
     }
+
+function distBetween(a, b) {
+    return Math.sqrt(
+        (b[0]-a[0])**2 +
+        (b[1]-a[1])**2 +
+        (b[2]-a[2])**2
+    );
+}
+function normVector(v) {
+    const len = Math.sqrt(v[0]**2 + v[1]**2 + v[2]**2);
+    return len > 0 ? [v[0]/len, v[1]/len, v[2]/len] : [0,0,0];
+}
+function shootAtEnemies() {
+    if (!playerEntity || !Fuxny.bloxd || !Fuxny.entities) return;
+    const myPos = Fuxny.entities.getState(1, "position").position.slice();
+    myPos[1] += 1.6;
+    if (playerEntity.heldItemState._gunItem.heldItemState.heldType !== "Gun" ||playerEntity.heldItemState._gunItem.reloading) return;
+    for (const key in Fuxny.bloxd.entityNames) {
+        if (key === "1") continue;
+        const entityData = Fuxny.entityList?.[1]?.[key];
+        if (!entityData || !entityData._isAlive || !entityData.canAttack) continue;
+	if (Fuxny.entityList[1][key]?.lobbyLeaderboardValues?.team) {if (Fuxny.entityList[1][key].lobbyLeaderboardValues.team === Fuxny.entityList[1][1].lobbyLeaderboardValues.team) continue;}
+	if (Fuxny.entityList[1][key]?.lobbyLeaderboardValues?.teamDisplay) {if (Fuxny.entityList[1][key].lobbyLeaderboardValues.teamDisplay === Fuxny.entityList[1][1].lobbyLeaderboardValues.teamDisplay) continue;}
+        const enemyPos = Fuxny.entities.getState(key, "position")?.position;
+        if (!enemyPos) continue;
+        const targetPos = [enemyPos[0], enemyPos[1]+1.6, enemyPos[2]];
+        const vector = normVector([
+            targetPos[0]-myPos[0],
+            targetPos[1]-myPos[1],
+            targetPos[2]-myPos[2]
+        ]);
+        const gun = playerEntity.heldItemState._gunItem;
+        const losCheck = gun.fireBullet(new Float32Array(vector), 0);
+        if (losCheck.meshNodeHit !== "HeadMesh") continue;
+        const originalFunc = gun.inaccuracyCalculator.getDirectionWithInaccuracy;
+        gun.inaccuracyCalculator.getDirectionWithInaccuracy = () => new Float32Array(vector);
+        gun.fireBulletLocal();
+        gun.inaccuracyCalculator.getDirectionWithInaccuracy = originalFunc;
+    }
+}
+
+const materialRank = {
+    "Wood": 0,
+    "Stone": 1,
+    "Iron": 2,
+    "Gold": 3,
+    "Diamond": 4,
+    "Knight": 5
+};
+
+function getMaterialRankForItem(item) {
+    if (!item || !item.name) return -1;
+    const mat = Object.keys(materialRank).find(m => item.name.includes(m));
+    return mat ? materialRank[mat] : -1;
+}
+
+function cleanInventory() {
+    if (!playerInventoryParent || !playerInventoryParent.playerInventory) return;
+
+    const inv = playerInventoryParent.playerInventory;
+    const items = inv.items;
+
+    function findIndices(predicate) {
+        const result = [];
+        for (let i = 0; i <= 45; i++) {
+            const it = items[i];
+            if (it && predicate(it, i)) result.push(i);
+        }
+        return result;
+    }
+
+    const dropNames = ["Seeds", "Sapling", "Mushroom", "Empty Bottle"];
+    for (let i = 0; i <= 45; i++) {
+        const item = items[i];
+        if (!item) continue;
+        if (dropNames.some(name => item.name.includes(name))) {
+            playerInventoryParent.removeItemClient(i, item.amount, true);
+        }
+    }
+
+    const armorTypes = {
+        "Helmet": 46,
+        "Chestplate": 47,
+        "Gauntlets": 48,
+        "Leggings": 49,
+        "Boots": 50
+    };
+
+    for (let i = 0; i <= 45; i++) {
+        const item = items[i];
+        if (!item) continue;
+        const type = Object.keys(armorTypes).find(t => item.name.includes(t));
+        if (!type) continue;
+        const material = Object.keys(materialRank).find(m => item.name.includes(m));
+        if (!material) continue;
+        const targetSlot = armorTypes[type];
+        const currentArmorItem = items[targetSlot];
+        if (!currentArmorItem) {
+            playerInventoryParent.swapPosClient(i, targetSlot);
+        } else {
+            const currentMat = Object.keys(materialRank).find(m => currentArmorItem.name.includes(m));
+            const currentRank = currentMat ? materialRank[currentMat] : -1;
+            if (materialRank[material] > currentRank) {
+                playerInventoryParent.swapPosClient(i, targetSlot);
+            } else {
+                playerInventoryParent.removeItemClient(i, 1, true);
+            }
+        }
+    }
+
+    const swordIndices = findIndices(it => it.name.includes("Sword"));
+    let bestSwordIdx = -1;
+    let bestSwordRank = -1;
+    for (const idx of swordIndices) {
+        const rank = getMaterialRankForItem(items[idx]);
+        if (rank > bestSwordRank) {
+            bestSwordRank = rank;
+            bestSwordIdx = idx;
+        }
+    }
+    if (bestSwordIdx !== -1) {
+        const hot0 = items[0];
+        if (!hot0) {
+            if (bestSwordIdx !== 0) playerInventoryParent.swapPosClient(bestSwordIdx, 0);
+        } else {
+            if (hot0.name.includes("Sword")) {
+                const hot0Rank = getMaterialRankForItem(hot0);
+                if (bestSwordRank > hot0Rank) {
+                    playerInventoryParent.swapPosClient(bestSwordIdx, 0);
+                }
+            } else {
+                playerInventoryParent.swapPosClient(bestSwordIdx, 0);
+            }
+        }
+        bestSwordIdx = 0;
+    }
+    for (const idx of swordIndices) {
+        if (idx === bestSwordIdx) continue;
+        const it = items[idx];
+        if (!it || !it.name.includes("Sword")) continue;
+        playerInventoryParent.removeItemClient(idx, it.amount, true);
+    }
+
+    const bowIndices = findIndices(it => it.name.includes("Bow"));
+    let bestBowIdx = -1;
+    let bestBowRank = -1;
+    for (const idx of bowIndices) {
+        const rank = getMaterialRankForItem(items[idx]);
+        if (rank > bestBowRank) {
+            bestBowRank = rank;
+            bestBowIdx = idx;
+        }
+    }
+    if (bestBowIdx !== -1) {
+        const hot1 = items[1];
+        if (!hot1) {
+            if (bestBowIdx !== 1) playerInventoryParent.swapPosClient(bestBowIdx, 1);
+        } else {
+            if (hot1.name.includes("Bow")) {
+                const hot1Rank = getMaterialRankForItem(hot1);
+                if (bestBowRank > hot1Rank) {
+                    playerInventoryParent.swapPosClient(bestBowIdx, 1);
+                }
+            } else {
+                playerInventoryParent.swapPosClient(bestBowIdx, 1);
+            }
+        }
+        bestBowIdx = 1;
+    }
+    for (const idx of bowIndices) {
+        if (idx === bestBowIdx) continue;
+        const it = items[idx];
+        if (!it || !it.name.includes("Bow")) continue;
+        playerInventoryParent.removeItemClient(idx, it.amount, true);
+    }
+
+    for (let h = 0; h <= 9; h++) {
+        const hotItem = items[h];
+        if (!hotItem) continue;
+        if (hotItem.name.includes("Arrow")) {
+            let freeSlot = -1;
+            for (let s = 10; s <= 45; s++) {
+                if (!items[s]) {
+                    freeSlot = s;
+                    break;
+                }
+            }
+            if (freeSlot !== -1) {
+                playerInventoryParent.swapPosClient(h, freeSlot);
+            }
+        }
+    }
+
+    const pickIndices = findIndices(it => it.name.includes("Pickaxe"));
+    let bestPickIdx = -1;
+    let bestPickRank = -1;
+    for (const idx of pickIndices) {
+        const rank = getMaterialRankForItem(items[idx]);
+        if (rank > bestPickRank) {
+            bestPickRank = rank;
+            bestPickIdx = idx;
+        }
+    }
+    if (bestPickIdx !== -1) {
+        const hot2 = items[2];
+        if (!hot2) {
+            if (bestPickIdx !== 2) playerInventoryParent.swapPosClient(bestPickIdx, 2);
+        } else {
+            if (hot2.name.includes("Pickaxe")) {
+                const hot2Rank = getMaterialRankForItem(hot2);
+                if (bestPickRank > hot2Rank) {
+                    playerInventoryParent.swapPosClient(bestPickIdx, 2);
+                }
+            } else {
+                playerInventoryParent.swapPosClient(bestPickIdx, 2);
+            }
+        }
+        bestPickIdx = 2;
+    }
+    for (const idx of pickIndices) {
+        if (idx === bestPickIdx) continue;
+        const it = items[idx];
+        if (!it || !it.name.includes("Pickaxe")) continue;
+        playerInventoryParent.removeItemClient(idx, it.amount, true);
+    }
+
+    const blockNames = ["Wood Planks", "Messy Stone"];
+    for (const name of blockNames) {
+        const indices = findIndices(it => it.name.includes(name) && it.typeObj && it.typeObj.stackable);
+        if (indices.length <= 1) continue;
+        let target = indices[0];
+        for (let k = 1; k < indices.length; k++) {
+            const src = indices[k];
+            const srcItem = items[src];
+            if (!srcItem) continue;
+            try {
+                playerInventoryParent.moveItemIntoIdxsClient(target, target + 1, src, srcItem.amount);
+            } catch (e) {
+                playerInventoryParent.swapPosClient(src, target);
+            }
+        }
+    }
+    let bestBlockSlot = -1;
+    let bestBlockAmount = -1;
+    for (let i = 0; i <= 45; i++) {
+        const it = items[i];
+        if (!it) continue;
+        if (blockNames.some(name => it.name.includes(name))) {
+            if (it.amount > bestBlockAmount && it.amount !== bestBlockAmount) {
+                bestBlockAmount = it.amount;
+                bestBlockSlot = i;
+            }
+        }
+    }
+    if (bestBlockSlot !== -1) {
+        const hot9 = items[9];
+        if (!hot9) {
+            if (bestBlockSlot !== 9) playerInventoryParent.swapPosClient(bestBlockSlot, 9);
+        } else {
+            playerInventoryParent.swapPosClient(bestBlockSlot, 9);
+        }
+    }
+
+    {
+        const snowIndices = findIndices(it => it.name.includes("Snowball") && it.typeObj && it.typeObj.stackable);
+        if (snowIndices.length > 0) {
+            const target = snowIndices[0];
+            for (let k = 1; k < snowIndices.length; k++) {
+                const src = snowIndices[k];
+                if (!items[src]) continue;
+                try {
+                    playerInventoryParent.moveItemIntoIdxsClient(target, target + 1, src, items[src].amount);
+                } catch (e) {
+                    playerInventoryParent.swapPosClient(src, target);
+                }
+            }
+            const hot3 = items[3];
+            if (!hot3) {
+                if (target !== 3) playerInventoryParent.swapPosClient(target, 3);
+            } else {
+                playerInventoryParent.swapPosClient(target, 3);
+            }
+        }
+    }
+
+    {
+        const breadIndices = findIndices(it => it.name.includes("Bread") && it.typeObj && it.typeObj.stackable);
+        if (breadIndices.length > 0) {
+            const target = breadIndices[0];
+            for (let k = 1; k < breadIndices.length; k++) {
+                const src = breadIndices[k];
+                if (!items[src]) continue;
+                try {
+                    playerInventoryParent.moveItemIntoIdxsClient(target, target + 1, src, items[src].amount);
+                } catch (e) {
+                    playerInventoryParent.swapPosClient(src, target);
+                }
+            }
+            const hot8 = items[8];
+            if (!hot8) {
+                if (target !== 8) playerInventoryParent.swapPosClient(target, 8);
+            } else {
+                playerInventoryParent.swapPosClient(target, 8);
+            }
+        }
+    }
+}
 
 function triggerXPDuper() {
     if (!injectedBool) {
@@ -1668,6 +1977,7 @@ function triggerXPDuper() {
             <div class="spectra-category hidden" data-tab-content="settings">
                 <div class="spectra-category-title">Settings</div>
                 <div class="spectra-toggle"><label>Anti-Ban (Safer)</label><input type="checkbox" id="hack-anti-ban"></div>
+                <div class="spectra-toggle"><label>Inventory Cleaner</label><input type="checkbox" id="hack-inv-cleaner"></div>
                 <button class="spectra-button" id="hack-health-color">Set Health Color</button>
                 <button class="spectra-button" id="hack-ranks">Spoof Ranks</button>
                 <button class="spectra-button" id="hack-player-coords">Show Player Coords</button>
@@ -2247,6 +2557,19 @@ function triggerXPDuper() {
         document.getElementById('hack-anti-ban')?.addEventListener('change', e => {
             antiBanEnabled = e.target.checked;
             showTemporaryNotification(`Anti-Ban Mode ${antiBanEnabled ? 'ENABLED' : 'DISABLED'}`);
+        });
+
+        document.getElementById('hack-inv-cleaner')?.addEventListener('change', e => {
+            if (!preCheck("Inventory Cleaner", e.target)) return;
+            inventoryCleanerEnabled = e.target.checked;
+            if (inventoryCleanerEnabled) {
+                inventoryCleanerInterval = setInterval(cleanInventory, 2000); // Run every 2 seconds
+                showTemporaryNotification("Inventory Cleaner ENABLED");
+            } else {
+                if (inventoryCleanerInterval) clearInterval(inventoryCleanerInterval);
+                inventoryCleanerInterval = null;
+                showTemporaryNotification("Inventory Cleaner DISABLED");
+            }
         });
 
         document.getElementById('hack-health-color')?.addEventListener('click', () => {
