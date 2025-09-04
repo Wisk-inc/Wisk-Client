@@ -232,6 +232,30 @@
         }
     };
 
+    function autoDetectChunkDataField(chunk) {
+        for (const key of Object.keys(chunk)) {
+            const val = chunk[key];
+            if (!val) continue;
+
+            if (
+                typeof val === "object" &&
+                Array.isArray(val.stride) &&
+                val.stride.length === 3 &&
+                (
+                    Array.isArray(val.data) ||
+                    ArrayBuffer.isView(val.data) // covers Uint16Array etc.
+                )
+            ) {
+                console.log("✅ Detected chunk data field:", key);
+                chunkDataField = key;
+                return key;
+            }
+        }
+
+        console.warn("❌ Failed to auto-detect chunk data field");
+        return null;
+    }
+
 
 
     function fadeVolume(from, to, duration) {
@@ -341,9 +365,12 @@
             for (const {
                     mesh,
                     id
-                } of chestBoxes[key]) {
+                }
+                of chestBoxes[key]) {
                 mesh.dispose();
-                Fuxny.entities.deleteEntity(id);
+                if (Fuxny.entities.deleteEntity) { // Check if deleteEntity exists
+                    Fuxny.entities.deleteEntity(id);
+                }
             }
         }
         scannedChunks.clear();
@@ -383,9 +410,6 @@
             const blockID = data[i];
             if (!blockIDs.includes(blockID)) continue;
 
-
-
-
             const [x, y, z] = reverseIndex(i, stride);
             const worldX = pos[0] + x + 0.5;
             const worldY = pos[1] + y + 0.5;
@@ -406,8 +430,6 @@
 
 
             if ([204, 205, 206, 207].includes(blockID)) {
-                console.log("FOUNDCHEST")
-
                 mesh.material.diffuseColor = new Fuxny.Lion.Color3(1, 0.5, 0); // orange
                 mesh.material.emissiveColor = new Fuxny.Lion.Color3(1, 0.5, 0); // makes it glow orange
             }
@@ -420,46 +442,41 @@
                 mesh.material.diffuseColor = new Fuxny.Lion.Color3(0.7, 0.5, 1); // pale purple
                 mesh.material.emissiveColor = new Fuxny.Lion.Color3(0.7, 0.5, 1); // makes it glow pale purple
             }
-
-
-
-
         }
     }
 
     function scanAllChunks() {
         if (!Fuxny?.world || !Fuxny?.world?.[Fuxny.impKey]?.hash) return;
         const chunkHash = Fuxny.world[Fuxny.impKey].hash;
-        // Step 1: Remove boxes for chunks no longer loaded
+
         for (const scannedKey of scannedChunks) {
             if (!(scannedKey in chestBoxes)) continue;
 
             if (!Object.values(chunkHash).some(chunk => getChunkKey(chunk) === scannedKey)) {
-                // Delete all meshes for this chunk
-                for (const {
-                        mesh,
-                        id
-                    } of chestBoxes[scannedKey]) {
-                    mesh.dispose(); // remove from scene
-                    Fuxny.entities.deleteEntity(id); // remove from entity system if needed
+                for (const { mesh, id } of chestBoxes[scannedKey]) {
+                    mesh.dispose();
+                     if (Fuxny.entities.deleteEntity) {
+                        Fuxny.entities.deleteEntity(id);
+                    }
                 }
                 delete chestBoxes[scannedKey];
                 scannedChunks.delete(scannedKey);
             }
         }
 
-        // Step 2: Scan newly loaded chunks
         for (const chunkKey in chunkHash) {
-
             const chunk = chunkHash[chunkKey];
             if (!chunkDataField) {
+                if(typeof autoDetectChunkDataField !== "function") {
+                    console.error("autoDetectChunkDataField is not defined!");
+                    return;
+                }
                 autoDetectChunkDataField(chunk);
-                if (!chunkDataField) continue; // Skip if still not found
+                if (!chunkDataField) continue;
             }
 
             const blockData = chunk[chunkDataField];
             if (!blockData?.data || !blockData.stride || !chunk.pos) continue;
-
 
             const key = getChunkKey(chunk);
             if (scannedChunks.has(key)) continue;
@@ -659,7 +676,6 @@
     };
 
     function wangPlace(position) {
-
         let heldBlock = r.values(Fuxny.noa.entities[Fuxny.impKey])[22].list[0]._blockItem;
         let worldInstanceKey = Object.keys(heldBlock)[0];
         let worldInstance = Object.values(heldBlock)[0];
@@ -763,7 +779,7 @@
     }
 
     function bunnyHop() {
-        if (!physState.isOnGround?.() || moveState.crouching || moveState.speed < 0.05) return;
+        if (!bhopEnabled || !physState.isOnGround?.() || moveState.crouching || moveState.speed < 0.05) return;
         moveState.jumping = true;
         physState._hadJumpInputPrevTick = false;
         setTimeout(() => {
@@ -2278,7 +2294,16 @@ function triggerXPDuper() {
         // Note: The old "Kill Aura" is replaced by the new one.
         document.getElementById('hack-bhop')?.addEventListener('change', e => {
             if (!preCheck("BHOP", e.target)) return;
-            if (e.target.checked) {
+
+            bhopEnabled = e.target.checked;
+
+            if (bhopEnabled) {
+                if (!moveState || !physState) {
+                    showTemporaryNotification("❌ BHOP references not initialized. Did you inject?");
+                    bhopEnabled = false;
+                    e.target.checked = false;
+                    return;
+                }
                 bhopIntervalId = setInterval(bunnyHop, 10);
                 showTemporaryNotification("BHOP enabled");
             } else {
@@ -2290,22 +2315,52 @@ function triggerXPDuper() {
 
         document.getElementById('hack-scaffold')?.addEventListener('change', e => {
             if (!preCheck("Scaffold", e.target)) return;
-            if (e.target.checked) {
+
+            let scaffoldEnabled = e.target.checked;
+
+            if (scaffoldEnabled) {
                 scaffoldIntervalId = setInterval(() => {
                     const pos = Fuxny.entities.getState(1, 'position').position;
                     if (!pos || !playerEntity || playerEntity.heldItemState.heldType !== "CubeBlock") return;
-                    const exactX = pos[0], exactZ = pos[2];
-                    const blockX = Math.floor(exactX), blockY = Math.floor(pos[1]), blockZ = Math.floor(exactZ);
-                    const checkPlace = (x, y, z) => (playerEntity.checkTargetedBlockCanBePlacedOver([x, y, z]) || r.values(Fuxny.world)[47].call(Fuxny.world, x, y, z) === 0);
-                    if (checkPlace(blockX, blockY - 1, blockZ)) { wangPlace([blockX, blockY - 1, blockZ]); return; }
-                    const dx = exactX - blockX, dz = exactZ - blockZ;
-                    const offsets = [];
-                    if (dx < 0.3) offsets.push([-1, 0]); if (dx > 0.7) offsets.push([1, 0]);
-                    if (dz < 0.3) offsets.push([0, -1]); if (dz > 0.7) offsets.push([0, 1]);
-                    for (const [ox, oz] of offsets) {
-                        const nx = blockX + ox, nz = blockZ + oz;
-                        if (checkPlace(nx, blockY - 1, nz)) { wangPlace([nx, blockY - 1, nz]); return; }
+
+                    const exactX = pos[0];
+                    const exactZ = pos[2];
+
+                    const blockX = Math.floor(exactX);
+                    const blockY = Math.floor(pos[1]);
+                    const blockZ = Math.floor(exactZ);
+
+                    const checkPlace = (x, y, z) => {
+                        return (
+                            playerEntity.checkTargetedBlockCanBePlacedOver([x, y, z]) ||
+                            r.values(Fuxny.world)[47].call(Fuxny.world, x, y, z) === 0
+                        );
+                    };
+
+                    if (checkPlace(blockX, blockY - 1, blockZ)) {
+                        wangPlace([blockX, blockY - 1, blockZ]);
+                        return;
                     }
+
+                    const dx = exactX - blockX;
+                    const dz = exactZ - blockZ;
+
+                    const offsets = [];
+
+                    if (dx < 0.3) offsets.push([-1, 0]);
+                    if (dx > 0.7) offsets.push([1, 0]);
+                    if (dz < 0.3) offsets.push([0, -1]);
+                    if (dz > 0.7) offsets.push([0, 1]);
+
+                    for (const [ox, oz] of offsets) {
+                        const nx = blockX + ox;
+                        const nz = blockZ + oz;
+                        if (checkPlace(nx, blockY - 1, nz)) {
+                            wangPlace([nx, blockY - 1, nz]);
+                            return;
+                        }
+                    }
+
                 }, 50);
                 showTemporaryNotification("Scaffold enabled");
             } else {
@@ -2317,13 +2372,35 @@ function triggerXPDuper() {
 
         document.getElementById('hack-walljump')?.addEventListener('change', e => {
             if (!preCheck("Walljump", e.target)) return;
-            const client = Fuxny?.clientOptions, body = Fuxny?.physics?.bodies?.[0];
-            if (!client || !body) return;
-            if (e.target.checked) {
-                Object.defineProperty(client, "airJumpCount", { get: () => { if (!body.resting) return 0; const [rx, , rz] = body.resting; return (rx === 1 || rx === -1 || rz === 1 || rz === -1) ? 999 : 0; }, set(_) {}, configurable: true });
+
+            const client = Fuxny?.clientOptions;
+            const body = Fuxny?.physics?.bodies?.[0];
+
+            if (!client || !body) {
+                showTemporaryNotification("❌ Walljump references not initialized.");
+                e.target.checked = false;
+                return;
+            }
+
+            wallJumpRunning = e.target.checked;
+
+            if (wallJumpRunning) {
+                Object.defineProperty(client, "airJumpCount", {
+                    get() {
+                        if (!body.resting) return 0;
+                        const [rx, , rz] = body.resting;
+                        return (rx === 1 || rx === -1 || rz === 1 || rz === -1) ? 999 : 0;
+                    },
+                    set(_) {},
+                    configurable: true
+                });
                 showTemporaryNotification("Walljump enabled");
             } else {
-                Object.defineProperty(client, "airJumpCount", { value: 0, writable: true, configurable: true });
+                Object.defineProperty(client, "airJumpCount", {
+                    value: 0,
+                    writable: true,
+                    configurable: true
+                });
                 showTemporaryNotification("Walljump disabled");
             }
         });
@@ -2399,16 +2476,30 @@ function triggerXPDuper() {
         // --- Visuals ---
         document.getElementById('hack-esp')?.addEventListener('change', e => {
             if (!preCheck("ESP", e.target)) return;
+
+            // This combines the logic from the source file's toggleESP with the UI's event listener.
             espEnabled = e.target.checked;
+
+            if (!Fuxny.impKey) {
+                showTemporaryNotification("❌ Injection not complete, cannot enable ESP.");
+                e.target.checked = false;
+                espEnabled = false;
+                return;
+            }
+
             const groupId = espEnabled ? 2 : 0;
+
             if (Array.isArray(r.values(Fuxny.rendering)[18].thinMeshes)) {
                 for (const thinMesh of r.values(Fuxny.rendering)[18].thinMeshes) {
                     if (thinMesh?.mesh && typeof thinMesh.mesh.renderingGroupId === "number") {
                         thinMesh.mesh.renderingGroupId = groupId;
                     }
                 }
+                console.log(`✅ Player ESP thin meshes render group set to ${groupId}`);
+            } else {
+                console.error("❌ Player ESP thinMeshes array not found.");
             }
-            showTemporaryNotification(`ESP ${espEnabled ? 'enabled' : 'disabled'}`);
+            showTemporaryNotification(`Player ESP ${espEnabled ? 'enabled' : 'disabled'}`);
         });
 
         document.getElementById('hack-chest-esp')?.addEventListener('change', e => {
