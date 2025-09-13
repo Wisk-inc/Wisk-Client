@@ -1,0 +1,31 @@
+[Unit]
+Description=AI Manga Video Generator
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/ai-manga-generator
+Environment=PATH=/opt/ai-manga-generator/venv/bin
+Environment=CUDA_VISIBLE_DEVICES=0
+Environment=PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+Environment=FLASK_ENV=production
+Environment=FLASK_DEBUG=False
+ExecStart=/opt/ai-manga-generator/venv/bin/python start_server.py --host 0.0.0.0 --port 5000
+Restart=always
+RestartSec=10
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/ai-manga-generator/uploads /opt/ai-manga-generator/outputs
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=16G
+
+[Install]
+WantedBy=multi-user.target
