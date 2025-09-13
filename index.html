@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Manga Video Generator</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <i class="fas fa-magic"></i>
+                <h1>AI Manga Video Generator</h1>
+            </div>
+            <p class="subtitle">Transform your manga images into animated videos with AI-powered character movement and atmospheric effects</p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="upload-section">
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-content">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <h3>Upload Your Manga Image</h3>
+                        <p>Drag and drop your image here or click to browse</p>
+                        <input type="file" id="imageInput" accept="image/*" hidden>
+                        <button class="upload-btn" onclick="document.getElementById('imageInput').click()">
+                            Choose Image
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="image-preview" id="imagePreview" style="display: none;">
+                    <img id="previewImg" src="" alt="Preview">
+                    <button class="remove-btn" onclick="removeImage()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="controls-section">
+                <div class="control-group">
+                    <label for="prompt">Animation Description</label>
+                    <textarea id="prompt" placeholder="Describe how you want your character to move and what atmospheric effects to add (e.g., 'Character walking through foggy forest with gentle wind effects')"></textarea>
+                </div>
+
+                <div class="control-row">
+                    <div class="control-group">
+                        <label for="resolution">Resolution</label>
+                        <select id="resolution">
+                            <option value="480p">480P (Faster)</option>
+                            <option value="720p">720P (Higher Quality)</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group">
+                        <label for="duration">Duration (seconds)</label>
+                        <select id="duration">
+                            <option value="3">3 seconds</option>
+                            <option value="5" selected>5 seconds</option>
+                            <option value="8">8 seconds</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="control-row">
+                    <div class="control-group">
+                        <label for="fogIntensity">Fog Intensity</label>
+                        <input type="range" id="fogIntensity" min="0" max="10" value="5">
+                        <span class="range-value">5</span>
+                    </div>
+
+                    <div class="control-group">
+                        <label for="movementSpeed">Movement Speed</label>
+                        <input type="range" id="movementSpeed" min="1" max="10" value="5">
+                        <span class="range-value">5</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label for="loopMode">Loop Mode</label>
+                    <select id="loopMode">
+                        <option value="none">No Loop</option>
+                        <option value="seamless" selected>Seamless Loop</option>
+                        <option value="reverse">Reverse Loop</option>
+                    </select>
+                </div>
+
+                <div class="advanced-options">
+                    <button class="toggle-advanced" onclick="toggleAdvanced()">
+                        <i class="fas fa-cog"></i> Advanced Options
+                    </button>
+                    <div class="advanced-content" id="advancedContent" style="display: none;">
+                        <div class="control-row">
+                            <div class="control-group">
+                                <label for="guidanceScale">Guidance Scale</label>
+                                <input type="range" id="guidanceScale" min="1" max="20" value="5">
+                                <span class="range-value">5</span>
+                            </div>
+                            <div class="control-group">
+                                <label for="steps">Diffusion Steps</label>
+                                <input type="range" id="steps" min="20" max="100" value="50">
+                                <span class="range-value">50</span>
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label for="negativePrompt">Negative Prompt</label>
+                            <textarea id="negativePrompt" placeholder="What you don't want in the video (e.g., 'blurry, low quality, distorted')"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="generate-section">
+                <button class="generate-btn" id="generateBtn" onclick="generateVideo()">
+                    <i class="fas fa-play"></i>
+                    Generate Video
+                </button>
+                <div class="progress-container" id="progressContainer" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <p class="progress-text" id="progressText">Initializing...</p>
+                </div>
+            </div>
+
+            <div class="result-section" id="resultSection" style="display: none;">
+                <h3>Generated Video</h3>
+                <div class="video-container">
+                    <video id="resultVideo" controls>
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
+                <div class="result-actions">
+                    <button class="action-btn download-btn" onclick="downloadVideo()">
+                        <i class="fas fa-download"></i> Download
+                    </button>
+                    <button class="action-btn share-btn" onclick="shareVideo()">
+                        <i class="fas fa-share"></i> Share
+                    </button>
+                    <button class="action-btn regenerate-btn" onclick="regenerateVideo()">
+                        <i class="fas fa-redo"></i> Regenerate
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>About</h4>
+                    <p>Powered by Wan2.1 AI technology for high-quality manga video generation with advanced character animation and atmospheric effects.</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Features</h4>
+                    <ul>
+                        <li>Character Movement Animation</li>
+                        <li>Fog & Atmospheric Effects</li>
+                        <li>Seamless Loop Generation</li>
+                        <li>High-Quality Output</li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Legal</h4>
+                    <ul>
+                        <li><a href="#license">License</a></li>
+                        <li><a href="#privacy">Privacy Policy</a></li>
+                        <li><a href="#terms">Terms of Service</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 AI Manga Video Generator. All rights reserved. Built with Wan2.1 technology.</p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <h3>Generating Your Video...</h3>
+            <p id="loadingText">This may take a few minutes. Please don't close this page.</p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
